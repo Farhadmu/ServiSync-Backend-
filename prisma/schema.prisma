@@ -1,0 +1,564 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// ENUMS
+// ──────────────────────────────────────────────────────────────────────
+
+enum Role {
+  CUSTOMER
+  TECHNICIAN
+  MANAGER
+  ADMIN
+}
+
+enum ServiceRequestStatus {
+  PENDING
+  UNDER_REVIEW
+  APPROVED
+  ASSIGNED
+  SCHEDULED
+  COMPLETED
+  INVOICED
+  PAID
+  CLOSED
+  REJECTED
+  CANCELLED
+}
+
+enum AssignmentStatus {
+  PENDING
+  SCHEDULED
+  ACCEPTED
+  REJECTED
+  CANCELLED
+}
+
+enum WorkOrderStatus {
+  SCHEDULED
+  ARRIVED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum InvoiceStatus {
+  DRAFT
+  PENDING
+  PAID
+  PARTIALLY_PAID
+  VOID
+}
+
+enum PaymentStatus {
+  PENDING
+  PROCESSING
+  SUCCESS
+  FAILED
+  CANCELLED
+  REFUNDED
+}
+
+enum PaymentProvider {
+  STRIPE
+  SSLCOMMERZ
+}
+
+enum PaymentMethod {
+  CARD
+  BANK_TRANSFER
+  MOBILE_BANKING
+}
+
+enum AttachmentEntityType {
+  SERVICE_REQUEST
+  WORK_ORDER
+  SERVICE_REPORT
+}
+
+enum AttachmentPurpose {
+  GENERAL
+  BEFORE
+  AFTER
+}
+
+enum NotificationType {
+  ASSIGNMENT
+  SCHEDULE_CHANGE
+  STATUS_CHANGE
+  INVOICE_GENERATED
+  PAYMENT_SUCCESS
+  PAYMENT_FAILED
+  FEEDBACK_REQUEST
+  SYSTEM
+}
+
+enum AuditEntity {
+  USER
+  ROLE
+  SERVICE_CATEGORY
+  SERVICE_TYPE
+  SERVICE_REQUEST
+  ASSIGNMENT
+  WORK_ORDER
+  WORK_ORDER_STATUS
+  SERVICE_REPORT
+  INVOICE
+  PAYMENT
+  FEEDBACK
+  SCHEDULE
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// USERS & PROFILES
+// ──────────────────────────────────────────────────────────────────────
+
+model User {
+  id              String    @id @default(cuid())
+  email           String    @unique
+  password        String?
+  name            String
+  role            Role      @default(CUSTOMER)
+  image           String?
+  isActive        Boolean   @default(true)
+  isEmailVerified Boolean   @default(false)
+  deletedAt       DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  customerProfile      CustomerProfile?
+  technicianProfile    TechnicianProfile?
+  serviceRequests      ServiceRequest[]   @relation("CustomerServiceRequests")
+  assignmentsManaged   Assignment[]
+  auditLogs            AuditLog[]
+  notifications        Notification[]
+  uploadedAttachments  Attachment[]       @relation("UploadedAttachments")
+  refreshTokens        RefreshToken[]
+  feedbackAsCustomer   Feedback[]         @relation("FeedbackCustomer")
+  feedbackAsTechnician Feedback[]         @relation("FeedbackTechnician")
+  payments             Payment[]          @relation("PaymentCustomer")
+
+  @@index([role])
+  @@index([isActive])
+  @@index([deletedAt])
+}
+
+model CustomerProfile {
+  id                     String         @id @default(cuid())
+  userId                 String         @unique
+  phone                  String?
+  address                String?
+  latitude               Float?
+  longitude              Float?
+  preferredPaymentMethod PaymentMethod?
+  createdAt              DateTime       @default(now())
+  updatedAt              DateTime       @updatedAt
+
+  user User @relation(fields: [userId], references: [id])
+}
+
+model TechnicianProfile {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  bio             String?
+  experienceYears Int?
+  hourlyRate      Decimal? @db.Decimal(12, 2)
+  baseLatitude    Float?
+  baseLongitude   Float?
+  isAvailable     Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user           User              @relation(fields: [userId], references: [id])
+  skills         TechnicianSkill[]
+  assignments    Assignment[]
+  schedules      Schedule[]
+  serviceReports ServiceReport[]
+}
+
+model RefreshToken {
+  id        String    @id @default(cuid())
+  tokenHash String    @unique
+  token     String?
+  userId    String
+  userAgent String?
+  ipAddress String?
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// SKILLS
+// ──────────────────────────────────────────────────────────────────────
+
+model Skill {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  technicians    TechnicianSkill[]
+  serviceTypeReq ServiceTypeRequiredSkill[]
+}
+
+model TechnicianSkill {
+  id           String  @id @default(cuid())
+  technicianId String
+  skillId      String
+  proficiency  String?
+
+  technician TechnicianProfile @relation(fields: [technicianId], references: [id], onDelete: Cascade)
+  skill      Skill             @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  @@unique([technicianId, skillId])
+  @@index([skillId])
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// SERVICE CATALOG
+// ──────────────────────────────────────────────────────────────────────
+
+model ServiceCategory {
+  id          String    @id @default(cuid())
+  name        String    @unique
+  description String?
+  icon        String?
+  isActive    Boolean   @default(true)
+  deletedAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  serviceTypes ServiceType[]
+}
+
+model ServiceType {
+  id              String    @id @default(cuid())
+  categoryId      String
+  name            String
+  description     String?
+  durationMinutes Int?
+  basePrice       Decimal?  @db.Decimal(12, 2)
+  isActive        Boolean   @default(true)
+  deletedAt       DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  category        ServiceCategory            @relation(fields: [categoryId], references: [id])
+  requiredSkills  ServiceTypeRequiredSkill[]
+  serviceRequests ServiceRequest[]
+
+  @@unique([categoryId, name])
+  @@index([categoryId])
+  @@index([isActive])
+}
+
+model ServiceTypeRequiredSkill {
+  id            String @id @default(cuid())
+  serviceTypeId String
+  skillId       String
+
+  serviceType ServiceType @relation(fields: [serviceTypeId], references: [id], onDelete: Cascade)
+  skill       Skill       @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  @@unique([serviceTypeId, skillId])
+  @@index([skillId])
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// SERVICE REQUESTS (customer)
+// ──────────────────────────────────────────────────────────────────────
+
+model ServiceRequest {
+  id                String               @id @default(cuid())
+  customerId        String
+  serviceTypeId     String
+  title             String
+  description       String?
+  location          String?
+  latitude          Float?
+  longitude         Float?
+  preferredDateTime DateTime?
+  status            ServiceRequestStatus @default(PENDING)
+  adminNotes        String?
+  rejectionReason   String?
+  closedAt          DateTime?
+  deletedAt         DateTime?
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+
+  customer    User         @relation("CustomerServiceRequests", fields: [customerId], references: [id])
+  serviceType ServiceType  @relation(fields: [serviceTypeId], references: [id])
+  assignments Assignment[]
+
+  @@index([customerId])
+  @@index([status])
+  @@index([serviceTypeId])
+  @@index([preferredDateTime])
+  @@index([createdAt])
+  @@index([deletedAt])
+  @@index([customerId, status])
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// ASSIGNMENTS & WORK ORDERS
+// ──────────────────────────────────────────────────────────────────────
+
+model Assignment {
+  id               String           @id @default(cuid())
+  serviceRequestId String
+  technicianId     String
+  managerId        String
+  status           AssignmentStatus @default(PENDING)
+  technicianNotes  String?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  acceptedAt       DateTime?
+  rejectedAt       DateTime?
+  rejectedReason   String?
+
+  serviceRequest ServiceRequest    @relation(fields: [serviceRequestId], references: [id])
+  technician     TechnicianProfile @relation(fields: [technicianId], references: [id], onDelete: Cascade)
+  manager        User              @relation(fields: [managerId], references: [id])
+  workOrder      WorkOrder?
+  schedule       Schedule?
+
+  @@index([serviceRequestId])
+  @@index([technicianId])
+  @@index([managerId])
+  @@index([status])
+}
+
+model Schedule {
+  id           String    @id @default(cuid())
+  assignmentId String    @unique
+  technicianId String
+  startAt      DateTime
+  endAt        DateTime
+  cancelledAt  DateTime?
+  cancelReason String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  assignment Assignment        @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  technician TechnicianProfile @relation(fields: [technicianId], references: [id])
+
+  @@index([technicianId])
+  @@index([startAt, endAt])
+  @@index([technicianId, startAt, endAt])
+}
+
+model WorkOrder {
+  id           String          @id @default(cuid())
+  assignmentId String          @unique
+  status       WorkOrderStatus @default(SCHEDULED)
+  arrivedAt    DateTime?
+  startedAt    DateTime?
+  completedAt  DateTime?
+  actualCost   Decimal?        @db.Decimal(12, 2)
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  assignment    Assignment     @relation(fields: [assignmentId], references: [id])
+  serviceReport ServiceReport?
+  invoice       Invoice?
+  feedback      Feedback?
+
+  @@index([status])
+}
+
+model ServiceReport {
+  id           String   @id @default(cuid())
+  workOrderId  String   @unique
+  technicianId String
+  summary      String?
+  findings     String?
+  actionsTaken String?
+  beforeImages String[] @default([])
+  afterImages  String[] @default([])
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  workOrder  WorkOrder         @relation(fields: [workOrderId], references: [id])
+  technician TechnicianProfile @relation(fields: [technicianId], references: [id])
+
+  @@index([technicianId])
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// ATTACHMENTS (polymorphic — no Prisma back-relations; entityType+entityId)
+// ──────────────────────────────────────────────────────────────────────
+
+model Attachment {
+  id           String               @id @default(cuid())
+  url          String
+  publicId     String
+  filename     String
+  mimeType     String
+  size         Int
+  width        Int?
+  height       Int?
+  entityType   AttachmentEntityType
+  entityId     String
+  purpose      AttachmentPurpose    @default(GENERAL)
+  uploadedById String
+  createdAt    DateTime             @default(now())
+
+  uploadedBy User @relation("UploadedAttachments", fields: [uploadedById], references: [id])
+
+  @@index([entityType, entityId])
+  @@index([uploadedById])
+  @@index([createdAt])
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// FINANCIALS
+// ──────────────────────────────────────────────────────────────────────
+
+model Invoice {
+  id             String         @id @default(cuid())
+  workOrderId    String         @unique
+  invoiceNumber  String         @unique
+  status         InvoiceStatus  @default(DRAFT)
+  totalAmount    Decimal        @db.Decimal(12, 2)
+  taxAmount      Decimal        @default(0) @db.Decimal(12, 2)
+  discountAmount Decimal        @default(0) @db.Decimal(12, 2)
+  dueAmount      Decimal        @db.Decimal(12, 2)
+  currency       String         @default("BDT")
+  paymentMethod  PaymentMethod?
+  issuedAt       DateTime?
+  paidAt         DateTime?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  workOrder WorkOrder     @relation(fields: [workOrderId], references: [id])
+  items     InvoiceItem[]
+  payments  Payment[]
+
+  @@index([status])
+}
+
+model InvoiceItem {
+  id          String   @id @default(cuid())
+  invoiceId   String
+  description String
+  quantity    Float
+  unitPrice   Decimal  @db.Decimal(12, 2)
+  amount      Decimal  @db.Decimal(12, 2)
+  createdAt   DateTime @default(now())
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([invoiceId])
+}
+
+model Payment {
+  id                String          @id @default(cuid())
+  invoiceId         String
+  customerId        String
+  status            PaymentStatus   @default(PENDING)
+  provider          PaymentProvider
+  providerPaymentId String?
+  providerSessionId String?
+  amount            Decimal         @db.Decimal(12, 2)
+  currency          String          @default("BDT")
+  method            PaymentMethod?
+  cardLast4         String?
+  ipAddress         String?
+  userAgent         String?
+  failureReason     String?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  processedAt       DateTime?
+
+  invoice  Invoice @relation(fields: [invoiceId], references: [id])
+  customer User    @relation("PaymentCustomer", fields: [customerId], references: [id])
+
+  @@index([invoiceId])
+  @@index([customerId])
+  @@index([status])
+  @@index([providerPaymentId])
+  @@index([provider, providerPaymentId])
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// FEEDBACK
+// ──────────────────────────────────────────────────────────────────────
+
+model Feedback {
+  id           String   @id @default(cuid())
+  workOrderId  String   @unique
+  customerId   String
+  technicianId String
+  rating       Int
+  comment      String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  workOrder  WorkOrder @relation(fields: [workOrderId], references: [id])
+  customer   User      @relation("FeedbackCustomer", fields: [customerId], references: [id])
+  technician User      @relation("FeedbackTechnician", fields: [technicianId], references: [id])
+
+  @@index([customerId])
+  @@index([technicianId])
+  @@index([rating])
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// NOTIFICATIONS
+// ──────────────────────────────────────────────────────────────────────
+
+model Notification {
+  id         String           @id @default(cuid())
+  userId     String
+  type       NotificationType
+  title      String
+  message    String
+  isRead     Boolean          @default(false)
+  entityType String?
+  entityId   String?
+  createdAt  DateTime         @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([userId, isRead])
+  @@index([createdAt])
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// AUDIT LOG
+// ──────────────────────────────────────────────────────────────────────
+
+model AuditLog {
+  id         String      @id @default(cuid())
+  userId     String?
+  action     String
+  entityType AuditEntity
+  entityId   String?
+  oldValues  Json?
+  newValues  Json?
+  ipAddress  String?
+  userAgent  String?
+  createdAt  DateTime    @default(now())
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([action])
+  @@index([entityType])
+  @@index([entityId])
+  @@index([createdAt])
+  @@index([entityType, entityId])
+}

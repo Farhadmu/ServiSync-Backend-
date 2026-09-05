@@ -1,0 +1,61 @@
+{
+  "name": "servisync",
+  "version": "1.0.0",
+  "description": "ServiSync - Field Service Management System backend API",
+  "type": "module",
+  "main": "src/server.ts",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc --noEmit",
+    "start": "tsx src/server.ts",
+    "lint": "echo 'install eslint to enable'",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev --name init",
+    "prisma:studio": "prisma studio",
+    "prisma:push": "prisma db push",
+    "prisma:seed": "tsx prisma/seed.ts",
+    "test": "tsx --test src/tests/core.test.ts"
+  },
+  "keywords": [
+    "field-service",
+    "api",
+    "express",
+    "prisma"
+  ],
+  "author": "ServiSync",
+  "license": "MIT",
+  "dependencies": {
+    "@prisma/client": "^7.0.0",
+    "@prisma/adapter-pg": "^7.0.0",
+    "pg": "^8.13.1",
+    "@types/bcrypt": "^5.0.2",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/multer": "^1.4.13",
+    "@types/node": "^22.14.0",
+    "@types/pg": "^8.11.10",
+    "bcrypt": "^6.0.0",
+    "cloudinary": "^2.11.0",
+    "cors": "^2.8.6",
+    "dotenv": "^16.6.1",
+    "express": "^5.2.1",
+    "express-rate-limit": "^7.5.1",
+    "google-auth-library": "^9.15.1",
+    "helmet": "^8.3.0",
+    "ioredis": "^5.11.1",
+    "jsonwebtoken": "^9.0.3",
+    "multer": "^1.4.5-lts.2",
+    "prisma": "^7.0.0",
+    "stripe": "^18.5.0",
+    "tsx": "^4.19.2",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.10",
+    "typescript": "^5.9.2"
+  },
+  "engines": {
+    "node": ">=20.19.0"
+  }
+}

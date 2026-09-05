@@ -1,0 +1,769 @@
+{
+  "info": {
+    "name": "ServiSync API - Complete Collection",
+    "description": "ServiSync Field Service Management System - Complete API Lifecycle & RBAC Collection",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:5000/api/v1" },
+    { "key": "accessToken", "value": "" },
+    { "key": "refreshToken", "value": "" },
+    { "key": "customerToken", "value": "" },
+    { "key": "managerToken", "value": "" },
+    { "key": "technicianToken", "value": "" },
+    { "key": "adminToken", "value": "" },
+    { "key": "serviceRequestId", "value": "" },
+    { "key": "assignmentId", "value": "" },
+    { "key": "workOrderId", "value": "" },
+    { "key": "serviceReportId", "value": "" },
+    { "key": "invoiceId", "value": "" },
+    { "key": "paymentId", "value": "" },
+    { "key": "sessionId", "value": "" },
+    { "key": "technicianProfileId", "value": "" },
+    { "key": "categoryId", "value": "" },
+    { "key": "serviceTypeId", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "1. Health & Ping",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/health",
+            "header": []
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Authentication",
+      "item": [
+        {
+          "name": "Register - Customer",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/auth/register",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"customer@servisync.com\",\n  \"password\": \"SecurePass123!\",\n  \"name\": \"Alice Customer\",\n  \"role\": \"CUSTOMER\",\n  \"phone\": \"+1234567890\",\n  \"address\": \"123 Main Street\"\n}"
+            },
+            "event": [
+              {
+                "listen": "test",
+                "script": {
+                  "exec": [
+                    "if (pm.response.code === 201) {",
+                    "  var res = pm.response.json();",
+                    "  pm.collectionVariables.set('customerToken', res.data.accessToken);",
+                    "  pm.collectionVariables.set('accessToken', res.data.accessToken);",
+                    "  pm.collectionVariables.set('refreshToken', res.data.refreshToken);",
+                    "}"
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        {
+          "name": "Register - Technician",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/auth/register",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"technician@servisync.com\",\n  \"password\": \"TechPass123!\",\n  \"name\": \"Bob Technician\",\n  \"role\": \"TECHNICIAN\",\n  \"skills\": [\"HVAC Repair\", \"Electrical\"],\n  \"hourlyRate\": 45.00\n}"
+            },
+            "event": [
+              {
+                "listen": "test",
+                "script": {
+                  "exec": [
+                    "if (pm.response.code === 201) {",
+                    "  var res = pm.response.json();",
+                    "  pm.collectionVariables.set('technicianToken', res.data.accessToken);",
+                    "}"
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        {
+          "name": "Login - Customer",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/auth/login",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"customer@servisync.com\",\n  \"password\": \"SecurePass123!\"\n}"
+            },
+            "event": [
+              {
+                "listen": "test",
+                "script": {
+                  "exec": [
+                    "if (pm.response.code === 200) {",
+                    "  var res = pm.response.json();",
+                    "  pm.collectionVariables.set('customerToken', res.data.accessToken);",
+                    "  pm.collectionVariables.set('accessToken', res.data.accessToken);",
+                    "  pm.collectionVariables.set('refreshToken', res.data.refreshToken);",
+                    "}"
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        {
+          "name": "Login - Manager",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/auth/login",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"manager@servisync.com\",\n  \"password\": \"ManagerPass123!\"\n}"
+            },
+            "event": [
+              {
+                "listen": "test",
+                "script": {
+                  "exec": [
+                    "if (pm.response.code === 200) {",
+                    "  var res = pm.response.json();",
+                    "  pm.collectionVariables.set('managerToken', res.data.accessToken);",
+                    "}"
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        {
+          "name": "Login - Admin",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/auth/login",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@servisync.com\",\n  \"password\": \"AdminPass123!\"\n}"
+            },
+            "event": [
+              {
+                "listen": "test",
+                "script": {
+                  "exec": [
+                    "if (pm.response.code === 200) {",
+                    "  var res = pm.response.json();",
+                    "  pm.collectionVariables.set('adminToken', res.data.accessToken);",
+                    "}"
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        {
+          "name": "Refresh Access Token",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/auth/refresh-token",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
+            },
+            "event": [
+              {
+                "listen": "test",
+                "script": {
+                  "exec": [
+                    "if (pm.response.code === 200) {",
+                    "  var res = pm.response.json();",
+                    "  pm.collectionVariables.set('accessToken', res.data.accessToken);",
+                    "  pm.collectionVariables.set('refreshToken', res.data.refreshToken);",
+                    "}"
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        {
+          "name": "Get Current User Profile",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/users/profile",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }]
+          }
+        },
+        {
+          "name": "Update User Profile",
+          "request": {
+            "method": "PATCH",
+            "url": "{{baseUrl}}/users/profile",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Alice Updated\",\n  \"phone\": \"+1987654321\",\n  \"address\": \"456 Elm Street\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/auth/logout",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Service Categories & Types",
+      "item": [
+        {
+          "name": "List Service Categories",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/service-categories",
+            "header": []
+          }
+        },
+        {
+          "name": "Create Service Category (Admin)",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/service-categories",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{adminToken}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"HVAC Systems\",\n  \"description\": \"Heating, Ventilation, and Air Conditioning\",\n  \"serviceTypes\": [\n    {\n      \"name\": \"AC Compressor Repair\",\n      \"description\": \"Diagnose and repair cooling compressor\",\n      \"basePrice\": 120.00,\n      \"requiredSkills\": [\"HVAC Repair\"]\n    }\n  ]\n}"
+            },
+            "event": [
+              {
+                "listen": "test",
+                "script": {
+                  "exec": [
+                    "if (pm.response.code === 201) {",
+                    "  var res = pm.response.json();",
+                    "  pm.collectionVariables.set('categoryId', res.data.id);",
+                    "  if (res.data.serviceTypes && res.data.serviceTypes.length > 0) {",
+                    "    pm.collectionVariables.set('serviceTypeId', res.data.serviceTypes[0].id);",
+                    "  }",
+                    "}"
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Technicians",
+      "item": [
+        {
+          "name": "List Technicians",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/technicians?status=ACTIVE&limit=10",
+            "header": [{ "key": "Authorization", "value": "Bearer {{managerToken}}" }],
+            "event": [
+              {
+                "listen": "test",
+                "script": {
+                  "exec": [
+                    "if (pm.response.code === 200) {",
+                    "  var res = pm.response.json();",
+                    "  if (res.data && res.data.technicians && res.data.technicians.length > 0) {",
+                    "    pm.collectionVariables.set('technicianProfileId', res.data.technicians[0].id);",
+                    "  }",
+                    "}"
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        {
+          "name": "Get Technician Profile",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/technicians/{{technicianProfileId}}",
+            "header": [{ "key": "Authorization", "value": "Bearer {{managerToken}}" }]
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. Service Requests (Customer & Manager)",
+      "item": [
+        {
+          "name": "Create Service Request (Customer)",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/service-requests",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{customerToken}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"categoryId\": \"{{categoryId}}\",\n  \"serviceTypeId\": \"{{serviceTypeId}}\",\n  \"title\": \"AC Not Cooling properly\",\n  \"description\": \"Unit turns on but does not blow cold air.\",\n  \"priority\": \"HIGH\",\n  \"location\": \"123 Main Street, Apt 4B\",\n  \"preferredDateTime\": \"2026-09-10T10:00:00.000Z\"\n}"
+            },
+            "event": [
+              {
+                "listen": "test",
+                "script": {
+                  "exec": [
+                    "if (pm.response.code === 201) {",
+                    "  var res = pm.response.json();",
+                    "  pm.collectionVariables.set('serviceRequestId', res.data.id);",
+                    "}"
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        {
+          "name": "List Service Requests",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/service-requests?page=1&limit=10&sortBy=createdAt&sortOrder=desc",
+            "header": [{ "key": "Authorization", "value": "Bearer {{customerToken}}" }]
+          }
+        },
+        {
+          "name": "Get Service Request Details",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/service-requests/{{serviceRequestId}}",
+            "header": [{ "key": "Authorization", "value": "Bearer {{customerToken}}" }]
+          }
+        },
+        {
+          "name": "Manager Review & Approve Request",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/service-requests/{{serviceRequestId}}/review",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{managerToken}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"action\": \"APPROVE\",\n  \"adminNotes\": \"Verified request details and approved for technician assignment.\"\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "6. Assignments & Scheduling",
+      "item": [
+        {
+          "name": "Manager Assign Technician",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/service-requests/{{serviceRequestId}}/assign",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{managerToken}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"technicianId\": \"{{technicianProfileId}}\",\n  \"scheduledStartAt\": \"2026-09-10T10:00:00.000Z\",\n  \"scheduledEndAt\": \"2026-09-10T12:00:00.000Z\",\n  \"instructions\": \"Please check coolant level first.\"\n}"
+            },
+            "event": [
+              {
+                "listen": "test",
+                "script": {
+                  "exec": [
+                    "if (pm.response.code === 201) {",
+                    "  var res = pm.response.json();",
+                    "  pm.collectionVariables.set('assignmentId', res.data.id);",
+                    "}"
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        {
+          "name": "Technician View Assignments",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/assignments?status=PENDING",
+            "header": [{ "key": "Authorization", "value": "Bearer {{technicianToken}}" }]
+          }
+        },
+        {
+          "name": "Technician Accept Assignment",
+          "request": {
+            "method": "PATCH",
+            "url": "{{baseUrl}}/assignments/{{assignmentId}}/accept",
+            "header": [{ "key": "Authorization", "value": "Bearer {{technicianToken}}" }],
+            "event": [
+              {
+                "listen": "test",
+                "script": {
+                  "exec": [
+                    "if (pm.response.code === 200) {",
+                    "  var res = pm.response.json();",
+                    "  if (res.data.workOrder) {",
+                    "    pm.collectionVariables.set('workOrderId', res.data.workOrder.id);",
+                    "  }",
+                    "}"
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "7. Work Orders & Service Execution",
+      "item": [
+        {
+          "name": "List Work Orders",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/work-orders",
+            "header": [{ "key": "Authorization", "value": "Bearer {{technicianToken}}" }]
+          }
+        },
+        {
+          "name": "Get Work Order by ID",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/work-orders/{{workOrderId}}",
+            "header": [{ "key": "Authorization", "value": "Bearer {{technicianToken}}" }]
+          }
+        },
+        {
+          "name": "Update Status to IN_PROGRESS",
+          "request": {
+            "method": "PATCH",
+            "url": "{{baseUrl}}/work-orders/{{workOrderId}}/status",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{technicianToken}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"IN_PROGRESS\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Submit Service Report",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/work-orders/{{workOrderId}}/report",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{technicianToken}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"diagnosis\": \"Refrigerant leak in condenser coil.\",\n  \"actionTaken\": \"Repaired coil seam, vacuum tested system, and recharged R-410A refrigerant.\",\n  \"partsReplaced\": [\"Coil O-Ring\", \"R-410A Freon 2lbs\"],\n  \"laborHours\": 2.5,\n  \"laborCost\": 112.50,\n  \"materialCost\": 45.00,\n  \"recommendations\": \"Recommended annual coil cleaning.\"\n}"
+            },
+            "event": [
+              {
+                "listen": "test",
+                "script": {
+                  "exec": [
+                    "if (pm.response.code === 201) {",
+                    "  var res = pm.response.json();",
+                    "  pm.collectionVariables.set('serviceReportId', res.data.id);",
+                    "}"
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        {
+          "name": "Get Service Report",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/work-orders/{{workOrderId}}/report",
+            "header": [{ "key": "Authorization", "value": "Bearer {{customerToken}}" }]
+          }
+        },
+        {
+          "name": "Update Status to COMPLETED",
+          "request": {
+            "method": "PATCH",
+            "url": "{{baseUrl}}/work-orders/{{workOrderId}}/status",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{technicianToken}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"COMPLETED\"\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "8. Invoices & Billing",
+      "item": [
+        {
+          "name": "Create Invoice (Manager/Admin)",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/invoices",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{managerToken}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"workOrderId\": \"{{workOrderId}}\",\n  \"discount\": 10.00,\n  \"tax\": 12.50,\n  \"dueDate\": \"2026-09-30T00:00:00.000Z\",\n  \"notes\": \"Thank you for choosing ServiSync!\"\n}"
+            },
+            "event": [
+              {
+                "listen": "test",
+                "script": {
+                  "exec": [
+                    "if (pm.response.code === 201) {",
+                    "  var res = pm.response.json();",
+                    "  pm.collectionVariables.set('invoiceId', res.data.id);",
+                    "}"
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        {
+          "name": "List Invoices",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/invoices?page=1&limit=10",
+            "header": [{ "key": "Authorization", "value": "Bearer {{customerToken}}" }]
+          }
+        },
+        {
+          "name": "Get Invoice Details",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/invoices/{{invoiceId}}",
+            "header": [{ "key": "Authorization", "value": "Bearer {{customerToken}}" }]
+          }
+        }
+      ]
+    },
+    {
+      "name": "9. Payments (Stripe)",
+      "item": [
+        {
+          "name": "Initiate Payment Checkout",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/payments/initiate",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{customerToken}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"invoiceId\": \"{{invoiceId}}\"\n}"
+            },
+            "event": [
+              {
+                "listen": "test",
+                "script": {
+                  "exec": [
+                    "if (pm.response.code === 200) {",
+                    "  var res = pm.response.json();",
+                    "  pm.collectionVariables.set('paymentId', res.data.paymentId);",
+                    "  pm.collectionVariables.set('sessionId', res.data.sessionId);",
+                    "}"
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        {
+          "name": "Stripe Payment Success Callback",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/payments/success?session_id={{sessionId}}",
+            "header": []
+          }
+        },
+        {
+          "name": "Get Payment Details",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/payments/{{paymentId}}",
+            "header": [{ "key": "Authorization", "value": "Bearer {{customerToken}}" }]
+          }
+        }
+      ]
+    },
+    {
+      "name": "10. Feedback & Ratings",
+      "item": [
+        {
+          "name": "Submit Feedback (Customer)",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/feedback",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{customerToken}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"workOrderId\": \"{{workOrderId}}\",\n  \"rating\": 5,\n  \"comment\": \"Excellent work! Arrived on time and resolved the problem cleanly.\"\n}"
+            }
+          }
+        },
+        {
+          "name": "List Feedback",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/feedback?page=1&limit=10",
+            "header": [{ "key": "Authorization", "value": "Bearer {{customerToken}}" }]
+          }
+        }
+      ]
+    },
+    {
+      "name": "11. Notifications",
+      "item": [
+        {
+          "name": "Get My Notifications",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/notifications",
+            "header": [{ "key": "Authorization", "value": "Bearer {{customerToken}}" }]
+          }
+        },
+        {
+          "name": "Mark All Notifications Read",
+          "request": {
+            "method": "PATCH",
+            "url": "{{baseUrl}}/notifications/read-all",
+            "header": [{ "key": "Authorization", "value": "Bearer {{customerToken}}" }]
+          }
+        }
+      ]
+    },
+    {
+      "name": "12. Admin & Analytics",
+      "item": [
+        {
+          "name": "Admin - List Users",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/admin/users?page=1&limit=10",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }]
+          }
+        },
+        {
+          "name": "Admin - System Stats",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/admin/stats",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }]
+          }
+        },
+        {
+          "name": "Admin - Audit Logs",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/admin/audit-logs?page=1&limit=20",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }]
+          }
+        }
+      ]
+    },
+    {
+      "name": "13. RBAC & Security Test Cases (403 Forbidden)",
+      "item": [
+        {
+          "name": "Customer tries to Review Request (403)",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/service-requests/{{serviceRequestId}}/review",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{customerToken}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"action\": \"APPROVE\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Customer tries to Assign Technician (403)",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/service-requests/{{serviceRequestId}}/assign",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{customerToken}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"technicianId\": \"{{technicianProfileId}}\",\n  \"scheduledStartAt\": \"2026-09-10T10:00:00.000Z\",\n  \"scheduledEndAt\": \"2026-09-10T12:00:00.000Z\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Technician tries to Create Invoice (403)",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/invoices",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{technicianToken}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"workOrderId\": \"{{workOrderId}}\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Customer tries to Access Admin Stats (403)",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/admin/stats",
+            "header": [{ "key": "Authorization", "value": "Bearer {{customerToken}}" }]
+          }
+        }
+      ]
+    }
+  ]
+}

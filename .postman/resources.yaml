@@ -1,0 +1,7 @@
+# Use this workspace to collaborate
+workspace:
+  id: 79ded831-dd85-4193-8a00-ce44bc0f62f3
+
+localResources:
+  collections:
+    - ../ServiSync.postman_collection.json

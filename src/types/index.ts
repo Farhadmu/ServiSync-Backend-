@@ -1,0 +1,12 @@
+export type UserRole = 'CUSTOMER' | 'TECHNICIAN' | 'MANAGER' | 'ADMIN';
+export type RequestStatus = 'PENDING' | 'UNDER_REVIEW' | 'APPROVED' | 'REJECTED' | 'CANCELLED' | 'CLOSED';
+export type AssignmentStatusType = 'PENDING' | 'SCHEDULED' | 'ACCEPTED' | 'REJECTED' | 'CANCELLED';
+export type WorkOrderStatusType = 'SCHEDULED' | 'ARRIVED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
+export type InvoiceStatusType = 'DRAFT' | 'PENDING' | 'PAID' | 'PARTIALLY_PAID' | 'VOID';
+export type PaymentStatusType = 'PENDING' | 'PROCESSING' | 'SUCCESS' | 'FAILED' | 'CANCELLED' | 'REFUNDED';
+export type PaymentProviderType = 'STRIPE' | 'SSLCOMMERZ';
+export type PaymentMethodType = 'CARD' | 'BANK_TRANSFER' | 'MOBILE_BANKING';
+export type AttachmentEntityTypeType = 'SERVICE_REQUEST' | 'WORK_ORDER' | 'SERVICE_REPORT';
+export type AttachmentPurposeType = 'GENERAL' | 'BEFORE' | 'AFTER';
+export type NotificationTypeType = 'ASSIGNMENT' | 'SCHEDULE_CHANGE' | 'STATUS_CHANGE' | 'INVOICE_GENERATED' | 'PAYMENT_SUCCESS' | 'PAYMENT_FAILED' | 'FEEDBACK_REQUEST' | 'SYSTEM';
+export type AuditEntityType = 'USER' | 'ROLE' | 'SERVICE_CATEGORY' | 'SERVICE_TYPE' | 'SERVICE_REQUEST' | 'ASSIGNMENT' | 'WORK_ORDER' | 'WORK_ORDER_STATUS' | 'SERVICE_REPORT' | 'INVOICE' | 'PAYMENT' | 'FEEDBACK' | 'SCHEDULE';
