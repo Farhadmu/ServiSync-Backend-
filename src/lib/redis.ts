@@ -1,17 +1,33 @@
 import Redis from 'ioredis';
 import { env } from '../config/env';
 
+const MAX_RETRIES = 10;
+let errorLogged = false;
+let giveUpLogged = false;
+
 const redis = new Redis(env.REDIS_URL, {
   maxRetriesPerRequest: 3,
   enableReadyCheck: true,
   retryStrategy: (times) => {
+    if (times > MAX_RETRIES) {
+      if (!giveUpLogged) {
+        console.error(`Redis giving up after ${MAX_RETRIES} attempts`);
+        giveUpLogged = true;
+      }
+      return null;
+    }
     const delay = Math.min(times * 50, 2000);
     return delay;
   },
 });
 
 redis.on('connect', () => console.log('Redis connected'));
-redis.on('error', (err) => console.error('Redis error:', err.message));
+redis.on('error', (err) => {
+  if (!errorLogged) {
+    console.error('Redis error:', err.message);
+    errorLogged = true;
+  }
+});
 
 export async function getCached<T>(key: string): Promise<T | null> {
   try {
