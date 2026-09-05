@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { RequestUser } from './authenticate';
+import type { RequestUser } from './authenticate';
 import { ApiError } from '../utils/ApiError';
 
 export const authorize = (...allowedRoles: ('CUSTOMER' | 'TECHNICIAN' | 'MANAGER' | 'ADMIN')[]) => {

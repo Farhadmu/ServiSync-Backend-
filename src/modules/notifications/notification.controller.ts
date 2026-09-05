@@ -4,7 +4,8 @@ import { prisma } from '../../lib/prisma';
 import { ApiError } from '../../utils/ApiError';
 import { asyncHandler } from '../../utils/asyncHandler';
 import { sendSuccess } from '../../utils/response';
-import { authenticate, RequestUser } from '../../middlewares/authenticate';
+import { authenticate } from '../../middlewares/authenticate';
+import type { RequestUser } from '../../middlewares/authenticate';
 
 export const getNotifications = asyncHandler(async (req: any, res: Response) => {
   const { page = 1, limit = 20, unreadOnly } = req.query;

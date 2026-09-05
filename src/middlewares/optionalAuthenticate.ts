@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
-import { verifyAccessToken, RequestUser } from '../utils/jwt';
+import { verifyAccessToken } from '../utils/jwt';
+import type { RequestUser } from '../utils/jwt';
 import { prisma } from '../lib/prisma';
 
 export const optionalAuthenticate = async (

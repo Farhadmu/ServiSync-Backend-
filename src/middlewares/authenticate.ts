@@ -1,9 +1,10 @@
 import { Request, Response, NextFunction } from 'express';
-import { verifyAccessToken, RequestUser } from '../utils/jwt';
+import { verifyAccessToken } from '../utils/jwt';
+import type { RequestUser } from '../utils/jwt';
 import { ApiError } from '../utils/ApiError';
 import { prisma } from '../lib/prisma';
 
-export { RequestUser };
+export type { RequestUser };
 
 export const authenticate = async (req: Request & { user?: RequestUser }, _res: Response, next: NextFunction) => {
   try {
