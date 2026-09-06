@@ -1,0 +1,23 @@
+$kind: http-request
+url: "{{baseUrl}}/auth/login"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: text
+  content: |-
+    {
+      "email": "admin@servisync.com",
+      "password": "Admin@123"
+    }
+scripts:
+  - type: afterResponse
+    code: "const res = pm.response.json();\r
+
+      if (res.data?.accessToken) {\r
+
+      \  pm.collectionVariables.set(\"adminToken\", res.data.accessToken);\r
+
+      }"
+    language: text/javascript
+order: 6000

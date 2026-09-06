@@ -1,0 +1,22 @@
+$kind: http-request
+url: "{{baseUrl}}/technicians/{{technicianProfileId}}"
+method: GET
+headers:
+  Authorization: Bearer {{managerToken}}
+auth:
+  type: bearer
+  credentials:
+    token: "{{managerToken}}"
+scripts:
+  - type: afterResponse
+    code: "const res = pm.response.json();\r
+
+      const list = Array.isArray(res.data) ? res.data : res.data?.items || [];\r
+
+      if (list[0]?.id) {\r
+
+      \  pm.collectionVariables.set(\"technicianProfileId\", list[0].id);\r
+
+      }"
+    language: text/javascript
+order: 2000

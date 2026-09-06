@@ -1,0 +1,20 @@
+$kind: collection
+description: ServiSync Field Service Management System - Complete API Lifecycle & RBAC Collection
+variables:
+  baseUrl: http://localhost:5000/api/v1
+  accessToken: ""
+  refreshToken: ""
+  customerToken: ""
+  managerToken: ""
+  technicianToken: ""
+  adminToken: ""
+  serviceRequestId: ""
+  assignmentId: ""
+  workOrderId: ""
+  serviceReportId: ""
+  invoiceId: ""
+  paymentId: ""
+  sessionId: ""
+  technicianProfileId: ""
+  categoryId: ""
+  serviceTypeId: ""

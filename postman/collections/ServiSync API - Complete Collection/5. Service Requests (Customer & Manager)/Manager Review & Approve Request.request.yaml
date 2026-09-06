@@ -1,0 +1,18 @@
+$kind: http-request
+url: "{{baseUrl}}/service-requests/{{serviceRequestId}}/review"
+method: POST
+headers:
+  Content-Type: application/json
+  Authorization: Bearer {{managerToken}}
+body:
+  type: text
+  content: |-
+    {
+      "action": "APPROVE",
+      "adminNotes": "Verified request details and approved for technician assignment."
+    }
+auth:
+  type: bearer
+  credentials:
+    token: "{{managerToken}}"
+order: 4000

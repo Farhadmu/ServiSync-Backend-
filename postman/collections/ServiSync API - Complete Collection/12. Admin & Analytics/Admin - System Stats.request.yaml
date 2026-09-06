@@ -1,0 +1,6 @@
+$kind: http-request
+url: "{{baseUrl}}/admin/stats"
+method: GET
+headers:
+  Authorization: Bearer {{adminToken}}
+order: 2000

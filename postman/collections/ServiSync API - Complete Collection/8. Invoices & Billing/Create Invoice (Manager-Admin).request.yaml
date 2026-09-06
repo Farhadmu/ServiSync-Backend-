@@ -1,0 +1,41 @@
+$kind: http-request
+name: Create Invoice (Manager/Admin)
+url: "{{baseUrl}}/invoices/work-orders/{{workOrderId}}/invoice"
+method: POST
+headers:
+  Content-Type: application/json
+  Authorization: Bearer {{managerToken}}
+body:
+  type: text
+  content: |-
+    {
+      "items": [
+        {
+          "description": "AC Compressor Repair - Labor",
+          "quantity": 1,
+          "unitPrice": 112.50
+        },
+        {
+          "description": "Materials (Coil O-Ring, R-410A Freon)",
+          "quantity": 1,
+          "unitPrice": 45.00
+        }
+      ],
+      "taxAmount": 12.50,
+      "discountAmount": 10.00
+    }
+auth:
+  type: bearer
+  credentials:
+    token: "{{managerToken}}"
+scripts:
+  - type: afterResponse
+    code: "const res = pm.response.json();\r
+
+      if (res.data?.id) {\r
+
+      \  pm.collectionVariables.set(\"invoiceId\", res.data.id);\r
+
+      }"
+    language: text/javascript
+order: 1000

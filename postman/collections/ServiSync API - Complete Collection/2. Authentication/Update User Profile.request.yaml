@@ -1,0 +1,15 @@
+$kind: http-request
+url: "{{baseUrl}}/users/profile"
+method: PATCH
+headers:
+  Content-Type: application/json
+  Authorization: Bearer {{accessToken}}
+body:
+  type: text
+  content: |-
+    {
+      "name": "Alice Updated",
+      "phone": "+1987654321",
+      "address": "456 Elm Street"
+    }
+order: 9000

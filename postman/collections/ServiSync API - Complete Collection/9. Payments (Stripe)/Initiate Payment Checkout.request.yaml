@@ -1,0 +1,35 @@
+$kind: http-request
+url: "{{baseUrl}}/payments/initiate"
+method: POST
+headers:
+  Content-Type: application/json
+  Authorization: Bearer {{customerToken}}
+body:
+  type: text
+  content: |-
+    {
+      "invoiceId": "{{invoiceId}}"
+    }
+auth:
+  type: bearer
+  credentials:
+    token: "{{customerToken}}"
+scripts:
+  - type: afterResponse
+    code: "const res = pm.response.json();\r
+
+      if (res.data?.paymentId) {\r
+
+      \  pm.collectionVariables.set(\"paymentId\", res.data.paymentId);\r
+
+      }\r
+
+      if (res.data?.sessionId) {\r
+
+      \  pm.collectionVariables.set(\"sessionId\", res.data.sessionId);\r
+
+      }\r
+
+      console.log(\"Full response:\", JSON.stringify(res.data, null, 2));"
+    language: text/javascript
+order: 1000

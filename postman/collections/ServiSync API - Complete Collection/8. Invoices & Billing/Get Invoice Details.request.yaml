@@ -1,0 +1,6 @@
+$kind: http-request
+url: "{{baseUrl}}/invoices/{{invoiceId}}"
+method: GET
+headers:
+  Authorization: Bearer {{customerToken}}
+order: 3000

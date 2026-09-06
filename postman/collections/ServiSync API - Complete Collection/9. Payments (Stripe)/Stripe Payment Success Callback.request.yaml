@@ -1,0 +1,6 @@
+$kind: http-request
+url: "{{baseUrl}}/payments/success?session_id={{sessionId}}"
+method: POST
+queryParams:
+  session_id: "{{sessionId}}"
+order: 2000

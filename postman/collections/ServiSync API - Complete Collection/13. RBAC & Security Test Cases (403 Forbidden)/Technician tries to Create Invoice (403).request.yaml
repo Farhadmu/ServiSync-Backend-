@@ -1,0 +1,13 @@
+$kind: http-request
+url: "{{baseUrl}}/invoices"
+method: POST
+headers:
+  Content-Type: application/json
+  Authorization: Bearer {{technicianToken}}
+body:
+  type: text
+  content: |-
+    {
+      "workOrderId": "{{workOrderId}}"
+    }
+order: 3000

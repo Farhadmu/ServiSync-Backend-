@@ -1,0 +1,21 @@
+$kind: http-request
+url: "{{baseUrl}}/work-orders/{{workOrderId}}/report"
+method: POST
+headers:
+  Content-Type: application/json
+  Authorization: Bearer {{technicianToken}}
+body:
+  type: text
+  content: |-
+    {
+      "summary": "Diagnosed and repaired refrigerant leak in condenser coil.",
+      "findings": "Refrigerant leak found in condenser coil seam causing insufficient cooling.",
+      "actionsTaken": "Repaired coil seam, vacuum tested system, and recharged R-410A refrigerant (2 lbs). Replaced coil O-ring.",
+      "beforeImages": [],
+      "afterImages": []
+    }
+auth:
+  type: bearer
+  credentials:
+    token: "{{technicianToken}}"
+order: 5000

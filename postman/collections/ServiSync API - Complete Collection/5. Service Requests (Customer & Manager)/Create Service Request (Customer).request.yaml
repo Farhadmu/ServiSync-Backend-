@@ -1,0 +1,33 @@
+$kind: http-request
+url: "{{baseUrl}}/service-requests"
+method: POST
+headers:
+  Content-Type: application/json
+  Authorization: Bearer {{customerToken}}
+body:
+  type: text
+  content: |-
+    {
+      "categoryId": "{{categoryId}}",
+      "serviceTypeId": "ac-repair",
+      "title": "AC Not Cooling properly",
+      "description": "Unit turns on but does not blow cold air.",
+      "priority": "HIGH",
+      "location": "123 Main Street, Apt 4B",
+      "preferredDateTime": "2026-09-10T10:00:00.000Z"
+    }
+auth:
+  type: bearer
+  credentials:
+    token: "{{customerToken}}"
+scripts:
+  - type: afterResponse
+    code: "const res = pm.response.json();\r
+
+      if (res.data?.id) {\r
+
+      \  pm.collectionVariables.set(\"serviceRequestId\", res.data.id);\r
+
+      }"
+    language: text/javascript
+order: 1000

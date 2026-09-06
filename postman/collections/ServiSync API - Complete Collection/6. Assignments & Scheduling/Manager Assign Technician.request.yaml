@@ -1,0 +1,37 @@
+$kind: http-request
+url: "{{baseUrl}}/assignments"
+method: POST
+headers:
+  Content-Type: application/json
+  Authorization: Bearer {{managerToken}}
+body:
+  type: text
+  content: |-
+    {
+      "serviceRequestId": "{{serviceRequestId}}",
+      "technicianId": "{{technicianProfileId}}",
+      "scheduledStartAt": "2026-09-10T10:00:00.000Z",
+      "scheduledEndAt": "2026-09-10T12:00:00.000Z",
+      "technicianNotes": "Please check coolant level first."
+    }
+auth:
+  type: bearer
+  credentials:
+    token: "{{managerToken}}"
+scripts:
+  - type: afterResponse
+    code: "const res = pm.response.json();\r
+
+      if (res.data?.id) {\r
+
+      \  pm.collectionVariables.set(\"assignmentId\", res.data.id);\r
+
+      }\r
+
+      if (res.data?.workOrder?.id) {\r
+
+      \  pm.collectionVariables.set(\"workOrderId\", res.data.workOrder.id);\r
+
+      }"
+    language: text/javascript
+order: 1000

@@ -1,0 +1,28 @@
+$kind: http-request
+url: "{{baseUrl}}/auth/register"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: text
+  content: |-
+    {
+      "email": "technician@servisync.com",
+      "password": "TechPass123!",
+      "name": "Bob Technician",
+      "role": "TECHNICIAN",
+      "skills": ["HVAC Repair", "Electrical"],
+      "hourlyRate": 45.00
+    }
+scripts:
+  - type: afterResponse
+    code: "const res = pm.response.json();\r
+
+      if (res.data?.accessToken) {\r
+
+      \  pm.collectionVariables.set(\"technicianToken\",
+      res.data.accessToken);\r
+
+      }\r\n"
+    language: text/javascript
+order: 2000

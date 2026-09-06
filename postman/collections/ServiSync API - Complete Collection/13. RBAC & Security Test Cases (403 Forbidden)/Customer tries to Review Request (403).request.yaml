@@ -1,0 +1,13 @@
+$kind: http-request
+url: "{{baseUrl}}/service-requests/{{serviceRequestId}}/review"
+method: POST
+headers:
+  Content-Type: application/json
+  Authorization: Bearer {{customerToken}}
+body:
+  type: text
+  content: |-
+    {
+      "action": "APPROVE"
+    }
+order: 1000

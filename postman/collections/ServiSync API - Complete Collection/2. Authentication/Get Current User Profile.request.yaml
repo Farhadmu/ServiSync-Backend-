@@ -1,0 +1,6 @@
+$kind: http-request
+url: "{{baseUrl}}/users/profile"
+method: GET
+headers:
+  Authorization: Bearer {{accessToken}}
+order: 8000

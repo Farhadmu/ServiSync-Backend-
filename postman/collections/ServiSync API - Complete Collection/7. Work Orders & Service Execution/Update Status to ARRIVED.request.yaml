@@ -1,0 +1,14 @@
+$kind: http-request
+url: "{{baseUrl}}/work-orders/{{workOrderId}}/status"
+method: PATCH
+headers:
+  Content-Type: application/json
+  Authorization: Bearer {{technicianToken}}
+body:
+  type: text
+  content: '{ "status": "ARRIVED" }'
+auth:
+  type: bearer
+  credentials:
+    token: "{{technicianToken}}"
+order: 3246

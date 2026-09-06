@@ -1,0 +1,27 @@
+$kind: http-request
+url: "{{baseUrl}}/auth/login"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: text
+  content: |-
+    {
+      "email": "customer@servisync.com",
+      "password": "SecurePass123!"
+    }
+scripts:
+  - type: afterResponse
+    code: "const res = pm.response.json();\r
+
+      if (res.data?.accessToken) {\r
+
+      \  pm.collectionVariables.set(\"customerToken\", res.data.accessToken);\r
+
+      \  pm.collectionVariables.set(\"accessToken\", res.data.accessToken);\r
+
+      \  pm.collectionVariables.set(\"refreshToken\", res.data.refreshToken);\r
+
+      }"
+    language: text/javascript
+order: 4000

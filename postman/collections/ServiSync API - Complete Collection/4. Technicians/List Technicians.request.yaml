@@ -1,0 +1,9 @@
+$kind: http-request
+url: "{{baseUrl}}/technicians?status=ACTIVE&limit=10"
+method: GET
+headers:
+  Authorization: Bearer {{managerToken}}
+queryParams:
+  status: ACTIVE
+  limit: "10"
+order: 1000

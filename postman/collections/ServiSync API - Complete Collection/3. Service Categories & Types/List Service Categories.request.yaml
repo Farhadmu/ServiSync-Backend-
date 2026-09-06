@@ -1,0 +1,22 @@
+$kind: http-request
+url: "{{baseUrl}}/service-categories"
+method: GET
+auth:
+  type: bearer
+  credentials:
+    token: "{{customerToken}}"
+scripts:
+  - type: afterResponse
+    code: "const res = pm.response.json();\r
+
+      const list = Array.isArray(res.data) ? res.data : res.data?.items || [];\r
+
+      const electrical = list.find(c => c.name === \"Electrical\");\r
+
+      if (electrical) {\r
+
+      \  pm.collectionVariables.set(\"categoryId\", electrical.id);\r
+
+      }"
+    language: text/javascript
+order: 1000

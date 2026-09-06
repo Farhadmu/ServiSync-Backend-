@@ -1,0 +1,19 @@
+$kind: http-request
+url: "{{baseUrl}}/feedback/work-orders/{{workOrderId}}/feedback"
+method: POST
+headers:
+  Content-Type: application/json
+  Authorization: Bearer {{customerToken}}
+body:
+  type: text
+  content: |-
+    {
+      "workOrderId": "{{workOrderId}}",
+      "rating": 5,
+      "comment": "Excellent work! Arrived on time and resolved the problem cleanly."
+    }
+auth:
+  type: bearer
+  credentials:
+    token: "{{customerToken}}"
+order: 1000

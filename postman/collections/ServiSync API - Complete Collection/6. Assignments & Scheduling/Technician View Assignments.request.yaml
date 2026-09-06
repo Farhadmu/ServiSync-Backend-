@@ -1,0 +1,8 @@
+$kind: http-request
+url: "{{baseUrl}}/assignments?status=PENDING"
+method: GET
+headers:
+  Authorization: Bearer {{technicianToken}}
+queryParams:
+  status: PENDING
+order: 2000

@@ -1,0 +1,13 @@
+$kind: http-request
+url: "{{baseUrl}}/assignments/{{assignmentId}}/respond"
+method: PATCH
+headers:
+  Authorization: Bearer {{technicianToken}}
+body:
+  type: json
+  content: "{\r\n  \"action\": \"ACCEPT\"\r\n}"
+auth:
+  type: bearer
+  credentials:
+    token: "{{technicianToken}}"
+order: 3000

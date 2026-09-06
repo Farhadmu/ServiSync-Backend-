@@ -1,0 +1,13 @@
+$kind: http-request
+url: "{{baseUrl}}/work-orders/{{workOrderId}}/status"
+method: PATCH
+headers:
+  Content-Type: application/json
+  Authorization: Bearer {{technicianToken}}
+body:
+  type: text
+  content: |-
+    {
+      "status": "COMPLETED"
+    }
+order: 7000

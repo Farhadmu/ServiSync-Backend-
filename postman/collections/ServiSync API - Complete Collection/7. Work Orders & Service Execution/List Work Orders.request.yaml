@@ -1,0 +1,25 @@
+$kind: http-request
+url: "{{baseUrl}}/work-orders"
+method: GET
+headers:
+  Authorization: Bearer {{technicianToken}}
+body:
+  type: json
+  content: ""
+auth:
+  type: bearer
+  credentials:
+    token: "{{technicianToken}}"
+scripts:
+  - type: afterResponse
+    code: "const res = pm.response.json();\r
+
+      const list = Array.isArray(res.data) ? res.data : res.data?.items || [];\r
+
+      if (list[0]?.id) {\r
+
+      \  pm.collectionVariables.set(\"workOrderId\", list[0].id);\r
+
+      }"
+    language: text/javascript
+order: 1000

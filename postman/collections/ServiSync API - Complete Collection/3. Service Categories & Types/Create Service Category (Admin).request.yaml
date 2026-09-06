@@ -1,0 +1,38 @@
+$kind: http-request
+url: "{{baseUrl}}/service-categories"
+method: POST
+headers:
+  Content-Type: application/json
+  Authorization: Bearer {{adminToken}}
+body:
+  type: text
+  content: |-
+    {
+      "name": "HVAC Systems",
+      "description": "Heating, Ventilation, and Air Conditioning",
+      "serviceTypes": [
+        {
+          "name": "AC Compressor Repair",
+          "description": "Diagnose and repair cooling compressor",
+          "basePrice": 120.00,
+          "requiredSkills": ["HVAC Repair"]
+        }
+      ]
+    }
+scripts:
+  - type: afterResponse
+    code: "const res = pm.response.json();\r
+
+      if (res.data?.id) {\r
+
+      \  pm.collectionVariables.set(\"categoryId\", res.data.id);\r
+
+      }\r
+
+      if (res.data?.serviceTypes?.[0]?.id) {\r
+
+      \  pm.collectionVariables.set(\"serviceTypeId\", res.data.serviceTypes[0].id);\r
+
+      }"
+    language: text/javascript
+order: 2000
