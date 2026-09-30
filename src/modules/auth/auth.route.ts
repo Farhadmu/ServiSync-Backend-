@@ -13,8 +13,8 @@ router.post('/logout', authenticate, logout);
 router.get('/seed', async (req, res) => {
   try {
     const { autoSeed } = await import('../../utils/autoSeed');
-    await autoSeed();
-    res.json({ success: true, message: 'Database successfully seeded with demo accounts and categories' });
+    await autoSeed(true);
+    res.json({ success: true, message: 'Database successfully seeded with demo accounts, technicians, and categories' });
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message });
   }

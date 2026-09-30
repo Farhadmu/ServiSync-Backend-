@@ -1,18 +1,17 @@
 import bcrypt from 'bcrypt';
 import prisma from '../lib/prisma';
 
-export async function autoSeed() {
+export async function autoSeed(force = false) {
   try {
-    const existingAdmin = await prisma.user.findUnique({
-      where: { email: 'admin@servisync.com' },
-    });
-
-    if (existingAdmin) {
-      // Check if customer1 also exists
-      const existingCustomer = await prisma.user.findUnique({
-        where: { email: 'customer1@example.com' },
+    if (!force) {
+      const existingAdmin = await prisma.user.findUnique({
+        where: { email: 'admin@servisync.com' },
       });
-      if (existingCustomer) {
+      const existingTech = await prisma.user.findUnique({
+        where: { email: 'tech1@servisync.com' },
+      });
+
+      if (existingAdmin && existingTech) {
         return; // Already seeded
       }
     }
@@ -63,9 +62,9 @@ export async function autoSeed() {
       },
     });
 
-    await prisma.technicianProfile.upsert({
+    const profile1 = await prisma.technicianProfile.upsert({
       where: { userId: tech1.id },
-      update: {},
+      update: { isAvailable: true },
       create: {
         userId: tech1.id,
         bio: 'Expert in electrical and HVAC',
@@ -88,9 +87,9 @@ export async function autoSeed() {
       },
     });
 
-    await prisma.technicianProfile.upsert({
+    const profile2 = await prisma.technicianProfile.upsert({
       where: { userId: tech2.id },
-      update: {},
+      update: { isAvailable: true },
       create: {
         userId: tech2.id,
         bio: 'Plumbing and general repair specialist',
@@ -98,6 +97,40 @@ export async function autoSeed() {
         hourlyRate: 40,
         isAvailable: true,
       },
+    });
+
+    // Seed Skills
+    const skillElectrical = await prisma.skill.upsert({
+      where: { name: 'ELECTRICAL' },
+      update: {},
+      create: { name: 'ELECTRICAL', description: 'Electrical installations and wiring' },
+    });
+    const skillPlumbing = await prisma.skill.upsert({
+      where: { name: 'PLUMBING' },
+      update: {},
+      create: { name: 'PLUMBING', description: 'Piping, leak detection and sanitary fittings' },
+    });
+    const skillHVAC = await prisma.skill.upsert({
+      where: { name: 'HVAC' },
+      update: {},
+      create: { name: 'HVAC', description: 'Heating, ventilation, and air conditioning' },
+    });
+
+    // Link skills to technicians
+    await prisma.technicianSkill.upsert({
+      where: { technicianId_skillId: { technicianId: profile1.id, skillId: skillElectrical.id } },
+      update: { proficiency: 'EXPERT' },
+      create: { technicianId: profile1.id, skillId: skillElectrical.id, proficiency: 'EXPERT' },
+    });
+    await prisma.technicianSkill.upsert({
+      where: { technicianId_skillId: { technicianId: profile1.id, skillId: skillHVAC.id } },
+      update: { proficiency: 'ADVANCED' },
+      create: { technicianId: profile1.id, skillId: skillHVAC.id, proficiency: 'ADVANCED' },
+    });
+    await prisma.technicianSkill.upsert({
+      where: { technicianId_skillId: { technicianId: profile2.id, skillId: skillPlumbing.id } },
+      update: { proficiency: 'EXPERT' },
+      create: { technicianId: profile2.id, skillId: skillPlumbing.id, proficiency: 'EXPERT' },
     });
 
     const customer1 = await prisma.user.upsert({

@@ -18,6 +18,32 @@ const technicianQuerySchema = z.object({
 });
 
 export const getTechnicians = asyncHandler(async (req: any, res: Response) => {
+  // Ensure all active users with role TECHNICIAN have an active technicianProfile
+  const technicianUsersWithoutProfile = await prisma.user.findMany({
+    where: {
+      role: 'TECHNICIAN',
+      deletedAt: null,
+      technicianProfile: null,
+    },
+    select: { id: true },
+  });
+
+  if (technicianUsersWithoutProfile.length > 0) {
+    for (const u of technicianUsersWithoutProfile) {
+      await prisma.technicianProfile.upsert({
+        where: { userId: u.id },
+        update: {},
+        create: {
+          userId: u.id,
+          bio: 'Certified Service Technician',
+          experienceYears: 2,
+          hourlyRate: 50,
+          isAvailable: true,
+        },
+      });
+    }
+  }
+
   const page = Math.max(1, parseInt(req.query.page as string) || 1);
   const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string) || 10));
   const skill = req.query.skill as string | undefined;
