@@ -21,6 +21,7 @@ import feedbackRoutes from './modules/feedback/feedback.route';
 import notificationRoutes from './modules/notifications/notification.route';
 import adminRoutes from './modules/admin/admin.route';
 import serviceReportRoutes from './modules/serviceReports/serviceReport.route';
+import contentRoutes from './modules/content/content.route';
 
 const app: Express = express();
 
@@ -49,6 +50,7 @@ app.use('/api/v1/feedback', feedbackRoutes);
 app.use('/api/v1/service-reports', serviceReportRoutes);
 app.use('/api/v1/notifications', notificationRoutes);
 app.use('/api/v1/admin', adminRoutes);
+app.use('/api/v1/content', contentRoutes);
 
 app.use(notFound);
 app.use(errorHandler);

@@ -176,7 +176,30 @@ export async function autoSeed() {
       create: { id: 'leak-repair', categoryId: plumbingCategory.id, name: 'Leak Repair', description: 'Water leak detection and repair', basePrice: 60, durationMinutes: 90, isActive: true },
     });
 
-    console.log('[AutoSeed] All demo accounts & categories seeded successfully!');
+    // Seed default website content sections
+    try {
+      const { DEFAULT_WEBSITE_SECTIONS } = await import('../modules/content/defaultContent');
+      for (const section of DEFAULT_WEBSITE_SECTIONS) {
+        await prisma.websiteContent.upsert({
+          where: { sectionKey: section.sectionKey },
+          update: {},
+          create: {
+            sectionKey: section.sectionKey,
+            title: section.title,
+            subtitle: section.subtitle,
+            order: section.order,
+            isVisible: section.isVisible,
+            isPublished: section.isPublished,
+            content: section.content,
+          },
+        });
+      }
+      console.log('[AutoSeed] Website CMS content initialized successfully!');
+    } catch (cmsErr) {
+      console.warn('[AutoSeed] Notice: WebsiteContent seed skipped non-fatally:', cmsErr);
+    }
+
+    console.log('[AutoSeed] All demo accounts, categories & CMS content seeded successfully!');
   } catch (error) {
     console.warn('[AutoSeed] Warning: Auto-seed skipped or failed non-fatally:', error);
   }
