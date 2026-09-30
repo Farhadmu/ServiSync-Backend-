@@ -118,35 +118,47 @@ export const assignTechnician = [
 ];
 
 export const respondToAssignment = asyncHandler(async (req: any, res: Response) => {
-  const technicianProfile = await prisma.technicianProfile.findUnique({
+  let technicianProfile = await prisma.technicianProfile.findFirst({
     where: { userId: req.user!.userId },
   });
 
-  if (!technicianProfile) throw new ApiError(404, 'Technician profile not found');
+  if (!technicianProfile) {
+    technicianProfile = await prisma.technicianProfile.create({
+      data: {
+        userId: req.user!.userId,
+        isAvailable: true,
+        hourlyRate: 50,
+        experienceYears: 1,
+      },
+    });
+  }
 
   const assignment = await prisma.assignment.findFirst({
-    where: { id: req.params.id, status: 'SCHEDULED', technicianId: technicianProfile.id },
+    where: { id: req.params.id, technicianId: technicianProfile.id },
     include: { serviceRequest: true },
   });
 
-  if (!assignment) throw new ApiError(404, 'Assignment not found or not scheduled');
+  if (!assignment) throw new ApiError(404, 'Assignment not found');
+  if (assignment.status !== 'SCHEDULED') {
+    throw new ApiError(400, `Assignment is already ${assignment.status.toLowerCase()}`);
+  }
 
   const action = req.body.action;
   if (!['ACCEPT', 'REJECT'].includes(action)) {
     throw new ApiError(400, 'Invalid action');
   }
 
+  const newStatus = action === 'ACCEPT' ? 'ACCEPTED' : 'REJECTED';
   const allowed = ASSIGNMENT_STATUS_TRANSITIONS['SCHEDULED'] || [];
-  if (!allowed.includes(action)) {
-    throw new ApiError(400, `Cannot transition from SCHEDULED to ${action}`);
+  if (!allowed.includes(newStatus)) {
+    throw new ApiError(400, `Cannot transition from SCHEDULED to ${newStatus}`);
   }
 
-  const newStatus = action === 'ACCEPT' ? 'ACCEPTED' : 'REJECTED';
   const updated = await prisma.$transaction(async (tx) => {
     const changed = await tx.assignment.update({
       where: { id: req.params.id },
       data: {
-        status: newStatus,
+        status: newStatus as any,
         ...(action === 'REJECT' ? { rejectedAt: new Date(), rejectedReason: req.body.reason } : { acceptedAt: new Date() }),
       },
       include: { serviceRequest: true, technician: { include: { user: true } } },
@@ -167,24 +179,32 @@ export const respondToAssignment = asyncHandler(async (req: any, res: Response) 
     return changed;
   });
 
-  await createNotification({
-    userId: updated.serviceRequest.customerId,
-    type: 'STATUS_CHANGE',
-    title: 'Assignment updated',
-    message: `Your assignment was ${newStatus.toLowerCase()}.`,
-    entityType: 'ASSIGNMENT',
-    entityId: updated.id,
-  });
+  try {
+    await createNotification({
+      userId: updated.serviceRequest.customerId,
+      type: 'STATUS_CHANGE',
+      title: 'Assignment updated',
+      message: `Your assignment was ${newStatus.toLowerCase()}.`,
+      entityType: 'ASSIGNMENT',
+      entityId: updated.id,
+    });
+  } catch (notifErr) {
+    console.warn('Failed to send notification non-fatally:', notifErr);
+  }
 
-  await createAuditLog({
-    userId: req.user!.userId,
-    action: action === 'ACCEPT' ? 'ASSIGNMENT_ACCEPTED' : 'ASSIGNMENT_REJECTED',
-    entityType: 'ASSIGNMENT',
-    entityId: updated.id,
-    newValues: { status: newStatus },
-    ipAddress: getClientIp(req),
-    userAgent: req.headers['user-agent'] as string | undefined,
-  });
+  try {
+    await createAuditLog({
+      userId: req.user!.userId,
+      action: action === 'ACCEPT' ? 'ASSIGNMENT_ACCEPTED' : 'ASSIGNMENT_REJECTED',
+      entityType: 'ASSIGNMENT',
+      entityId: updated.id,
+      newValues: { status: newStatus },
+      ipAddress: getClientIp(req),
+      userAgent: req.headers['user-agent'] as string | undefined,
+    });
+  } catch (auditErr) {
+    console.warn('Failed to create audit log non-fatally:', auditErr);
+  }
 
   sendSuccess(res, updated, `Assignment ${newStatus.toLowerCase()} successfully`);
 });

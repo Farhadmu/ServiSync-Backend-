@@ -94,7 +94,7 @@ export const updateWorkOrderStatus = asyncHandler(async (req: any, res: Response
   if (!workOrder) throw new ApiError(404, 'Work order not found');
 
   if (req.user!.role === 'TECHNICIAN') {
-    const techProfile = await prisma.technicianProfile.findUnique({ where: { userId: req.user!.userId } });
+    const techProfile = await prisma.technicianProfile.findFirst({ where: { userId: req.user!.userId } });
     if (!techProfile || workOrder.assignment.technicianId !== techProfile.id) throw new ApiError(403, 'Access denied');
   }
 

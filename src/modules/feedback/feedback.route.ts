@@ -13,5 +13,7 @@ const feedbackSchema = z.object({
 
 router.post('/work-orders/:workOrderId/feedback', authenticate, authorize('CUSTOMER'), validateRequest({ body: feedbackSchema }), submitFeedback);
 router.get('/work-orders/:workOrderId/feedback', authenticate, getFeedback);
+router.post('/work-orders/:workOrderId', authenticate, authorize('CUSTOMER'), validateRequest({ body: feedbackSchema }), submitFeedback);
+router.get('/work-orders/:workOrderId', authenticate, getFeedback);
 
 export default router;

@@ -10,7 +10,7 @@ export const upsertServiceReport = [
   asyncHandler(async (req: any, res: Response) => {
     const { workOrderId } = serviceReportParamsSchema.parse(req.params);
     const data = serviceReportSchema.parse(req.body);
-    const technician = await prisma.technicianProfile.findUnique({ where: { userId: req.user!.userId } });
+    const technician = await prisma.technicianProfile.findFirst({ where: { userId: req.user!.userId } });
 
     if (!technician) throw new ApiError(404, 'Technician profile not found');
 

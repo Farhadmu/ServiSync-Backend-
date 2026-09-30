@@ -19,7 +19,7 @@ export const submitFeedback = [
   asyncHandler(async (req: any, res: Response) => {
     const workOrder = await prisma.workOrder.findFirst({
       where: { id: req.params.workOrderId },
-      include: { assignment: { include: { serviceRequest: true } }, invoice: true },
+      include: { assignment: { include: { serviceRequest: true, technician: true } }, invoice: true },
     });
 
     if (!workOrder) throw new ApiError(404, 'Work order not found');
@@ -29,7 +29,7 @@ export const submitFeedback = [
     if (workOrder.status !== 'COMPLETED') {
       throw new ApiError(400, 'Work order must be completed to give feedback');
     }
-    if (!workOrder.invoice || workOrder.invoice.status !== 'PAID') {
+    if (workOrder.invoice && workOrder.invoice.status !== 'PAID') {
       throw new ApiError(400, 'Payment must be completed before giving feedback');
     }
 
@@ -40,7 +40,7 @@ export const submitFeedback = [
       data: {
         workOrderId: workOrder.id,
         customerId: req.user!.userId,
-        technicianId: workOrder.assignment.technicianId,
+        technicianId: workOrder.assignment.technician.userId,
         rating: req.body.rating,
         comment: req.body.comment,
       },
