@@ -24,6 +24,7 @@ import serviceReportRoutes from './modules/serviceReports/serviceReport.route';
 import contentRoutes from './modules/content/content.route';
 
 const app: Express = express();
+app.set('trust proxy', 1);
 
 app.use(helmet());
 app.use(configureCors(env));
