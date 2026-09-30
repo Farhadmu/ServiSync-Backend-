@@ -25,15 +25,16 @@ const updateServiceRequestSchema = z.object({
 export const createServiceRequest = [
   validateRequest({ body: createServiceRequestSchema }),
   asyncHandler(async (req: any, res: Response) => {
-    const category = await prisma.serviceCategory.findFirst({
-      where: { id: req.body.categoryId, deletedAt: null, isActive: true },
-    });
-    if (!category) throw new ApiError(404, 'Service category not found');
-
     const serviceType = await prisma.serviceType.findFirst({
-      where: { id: req.body.serviceTypeId, deletedAt: null, isActive: true, categoryId: req.body.categoryId },
+      where: { id: req.body.serviceTypeId, deletedAt: null, isActive: true },
     });
     if (!serviceType) throw new ApiError(404, 'Service type not found');
+
+    const targetCategoryId = req.body.categoryId || serviceType.categoryId;
+    const category = await prisma.serviceCategory.findFirst({
+      where: { id: targetCategoryId, deletedAt: null, isActive: true },
+    });
+    if (!category) throw new ApiError(404, 'Service category not found');
 
     const request = await prisma.serviceRequest.create({
       data: {

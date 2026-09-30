@@ -9,14 +9,14 @@ import { uploadLimiter } from '../../middlewares/rateLimiter';
 const router = Router();
 
 const createServiceRequestSchema = z.object({
-  categoryId: z.string().min(1, 'Category is required'),
+  categoryId: z.string().optional(),
   serviceTypeId: z.string().min(1, 'Service type is required'),
   title: z.string().min(3, 'Title must be at least 3 characters'),
   description: z.string().optional(),
   location: z.string().optional(),
   latitude: z.coerce.number().optional(),
   longitude: z.coerce.number().optional(),
-  preferredDateTime: z.string().datetime().optional(),
+  preferredDateTime: z.string().optional(),
 });
 
 const updateServiceRequestSchema = z.object({
