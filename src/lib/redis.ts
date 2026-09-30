@@ -1,17 +1,26 @@
 import Redis from 'ioredis';
 import { env } from '../config/env';
 
-const redis = new Redis(env.REDIS_URL, {
-  maxRetriesPerRequest: 3,
-  enableReadyCheck: true,
+const redisUrl = env.REDIS_URL && env.REDIS_URL.trim() !== '' ? env.REDIS_URL : 'redis://localhost:6379';
+
+const redis = new Redis(redisUrl, {
+  maxRetriesPerRequest: 1,
+  enableReadyCheck: false,
+  lazyConnect: true,
   retryStrategy: (times) => {
-    const delay = Math.min(times * 50, 2000);
-    return delay;
+    if (times > 3) return null;
+    return Math.min(times * 100, 2000);
   },
 });
 
+redis.connect().catch((err) => {
+  // Gracefully handle redis unavailability
+});
+
 redis.on('connect', () => console.log('Redis connected'));
-redis.on('error', (err) => console.error('Redis error:', err.message));
+redis.on('error', (err) => {
+  // Silent fallback so Redis unavailability does not crash HTTP server
+});
 
 export async function getCached<T>(key: string): Promise<T | null> {
   try {
