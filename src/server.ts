@@ -6,8 +6,14 @@ const PORT = appConfig.port || 5000;
 
 const server = http.createServer(app);
 
-server.listen(PORT, () => {
+server.listen(PORT, async () => {
   console.log(`ServiSync server running on port ${PORT} in ${appConfig.env} mode`);
+  try {
+    const { autoSeed } = await import('./utils/autoSeed');
+    await autoSeed();
+  } catch (err) {
+    console.warn('AutoSeed warning:', err);
+  }
 });
 
 process.on('SIGINT', async () => {
