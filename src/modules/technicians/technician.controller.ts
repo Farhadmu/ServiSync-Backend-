@@ -100,3 +100,80 @@ export const getTechnicianById = asyncHandler(async (req: any, res: Response) =>
 
   sendSuccess(res, technician, 'Technician fetched successfully');
 });
+
+export const getPublicTechnicianProfile = asyncHandler(async (req: any, res: Response) => {
+  const { id } = req.params;
+
+  const technician = await prisma.technicianProfile.findFirst({
+    where: {
+      OR: [{ id }, { userId: id }],
+      user: { deletedAt: null, isActive: true },
+    },
+    include: {
+      user: { select: { id: true, name: true, image: true } },
+      skills: { include: { skill: true } },
+    },
+  });
+
+  if (!technician) {
+    throw new ApiError(404, 'Technician not found');
+  }
+
+  // Calculate real verified stats
+  const [completedCount, feedbacks] = await Promise.all([
+    prisma.workOrder.count({
+      where: {
+        assignment: { technicianId: technician.id },
+        status: 'COMPLETED',
+      },
+    }),
+    prisma.feedback.findMany({
+      where: { technicianId: technician.userId },
+      select: {
+        id: true,
+        rating: true,
+        comment: true,
+        createdAt: true,
+        customer: { select: { name: true, image: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 20,
+    }),
+  ]);
+
+  const totalReviews = feedbacks.length;
+  const averageRating =
+    totalReviews > 0
+      ? Number((feedbacks.reduce((acc, f) => acc + f.rating, 0) / totalReviews).toFixed(1))
+      : 0;
+
+  const publicProfile = {
+    id: technician.id,
+    userId: technician.userId,
+    name: technician.user.name,
+    image: technician.user.image,
+    bio: technician.bio || 'Professional Field Service Technician',
+    experienceYears: technician.experienceYears || 0,
+    skills: technician.skills.map((s) => ({
+      id: s.skill.id,
+      name: s.skill.name,
+      proficiency: s.proficiency || 'Standard',
+    })),
+    stats: {
+      completedJobs: completedCount,
+      totalReviews,
+      averageRating,
+    },
+    reviews: feedbacks.map((f) => ({
+      id: f.id,
+      rating: f.rating,
+      comment: f.comment,
+      createdAt: f.createdAt,
+      customerName: f.customer?.name || 'Customer',
+      customerImage: f.customer?.image,
+    })),
+  };
+
+  sendSuccess(res, publicProfile, 'Public technician profile retrieved successfully');
+});
+

@@ -71,3 +71,29 @@ export const getFeedback = asyncHandler(async (req: any, res: Response) => {
 
   sendSuccess(res, feedback, 'Feedback fetched successfully');
 });
+
+export const getMyReviews = asyncHandler(async (req: any, res: Response) => {
+  const userId = req.user.userId;
+
+  const reviews = await prisma.feedback.findMany({
+    where: { customerId: userId },
+    orderBy: { createdAt: 'desc' },
+    include: {
+      technician: { select: { id: true, name: true, image: true } },
+      workOrder: {
+        include: {
+          assignment: {
+            include: {
+              serviceRequest: {
+                select: { id: true, title: true, serviceType: { select: { name: true } } },
+              },
+            },
+          },
+        },
+      },
+    },
+  });
+
+  sendSuccess(res, reviews, 'Customer reviews retrieved successfully');
+});
+

@@ -275,3 +275,430 @@ export const uploadServiceRequestAttachment = asyncHandler(async (req: any, res:
   });
   sendCreated(res, attachment, 'Attachment uploaded successfully');
 });
+
+export const getAvailableSlots = asyncHandler(async (req: any, res: Response) => {
+  const { date, serviceTypeId } = req.query;
+
+  const targetDateStr = typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date)
+    ? date
+    : new Date().toISOString().split('T')[0];
+
+  // Base technician capacity
+  const totalAvailableTechs = await prisma.technicianProfile.count({
+    where: {
+      isAvailable: true,
+      user: { deletedAt: null, isActive: true },
+      ...(serviceTypeId
+        ? {
+            skills: {
+              some: {
+                skill: {
+                  serviceTypeReq: {
+                    some: { serviceTypeId: serviceTypeId as string },
+                  },
+                },
+              },
+            },
+          }
+        : {}),
+    },
+  });
+
+  const capacityPerSlot = Math.max(2, totalAvailableTechs);
+
+  // Standard business slots
+  const slotDefinitions = [
+    { id: 'slot-1', label: '09:00 AM - 11:00 AM', startHour: 9, endHour: 11 },
+    { id: 'slot-2', label: '11:00 AM - 01:00 PM', startHour: 11, endHour: 13 },
+    { id: 'slot-3', label: '02:00 PM - 04:00 PM', startHour: 14, endHour: 16 },
+    { id: 'slot-4', label: '04:00 PM - 06:00 PM', startHour: 16, endHour: 18 },
+  ];
+
+  const now = new Date();
+
+  const slots = await Promise.all(
+    slotDefinitions.map(async (slot) => {
+      const startTime = new Date(`${targetDateStr}T${String(slot.startHour).padStart(2, '0')}:00:00.000Z`);
+      const endTime = new Date(`${targetDateStr}T${String(slot.endHour).padStart(2, '0')}:00:00.000Z`);
+
+      // If slot is in the past
+      if (startTime < now) {
+        return {
+          id: slot.id,
+          label: slot.label,
+          startTime: startTime.toISOString(),
+          endTime: endTime.toISOString(),
+          available: false,
+          remainingSlots: 0,
+          reason: 'Time has passed',
+        };
+      }
+
+      // Check overlapping schedules
+      const bookedSchedulesCount = await prisma.schedule.count({
+        where: {
+          cancelledAt: null,
+          startAt: { lt: endTime },
+          endAt: { gt: startTime },
+        },
+      });
+
+      // Check pending or approved requests requested for this window
+      const bookedRequestsCount = await prisma.serviceRequest.count({
+        where: {
+          deletedAt: null,
+          status: { in: ['PENDING', 'UNDER_REVIEW', 'APPROVED', 'ASSIGNED', 'SCHEDULED'] },
+          preferredDateTime: { gte: startTime, lt: endTime },
+        },
+      });
+
+      const totalBooked = bookedSchedulesCount + bookedRequestsCount;
+      const remaining = Math.max(0, capacityPerSlot - totalBooked);
+      const isAvailable = remaining > 0;
+
+      return {
+        id: slot.id,
+        label: slot.label,
+        startTime: startTime.toISOString(),
+        endTime: endTime.toISOString(),
+        available: isAvailable,
+        remainingSlots: remaining,
+        reason: isAvailable ? undefined : 'Fully booked',
+      };
+    })
+  );
+
+  sendSuccess(res, { date: targetDateStr, slots }, 'Available appointment slots retrieved successfully');
+});
+
+export const getServiceTimeline = asyncHandler(async (req: any, res: Response) => {
+  const { role, userId } = req.user;
+  const { id } = req.params;
+
+  const request = await prisma.serviceRequest.findFirst({
+    where: {
+      id,
+      deletedAt: null,
+      ...(role === 'CUSTOMER' ? { customerId: userId } : {}),
+    },
+    include: {
+      serviceType: { include: { category: true } },
+      customer: { select: { id: true, name: true, email: true, image: true } },
+      assignments: {
+        where: { status: { not: 'CANCELLED' } },
+        orderBy: { createdAt: 'desc' },
+        include: {
+          technician: { include: { user: { select: { id: true, name: true, image: true } } } },
+          schedule: true,
+          workOrder: {
+            include: {
+              serviceReport: true,
+              invoice: { include: { payments: true } },
+            },
+          },
+        },
+      },
+      quotes: { orderBy: { version: 'desc' } },
+    },
+  });
+
+  if (!request) {
+    throw new ApiError(404, 'Service request not found');
+  }
+
+  const activeAssignment = request.assignments[0];
+  const activeWorkOrder = activeAssignment?.workOrder;
+  const activeSchedule = activeAssignment?.schedule;
+  const activeInvoice = activeWorkOrder?.invoice;
+
+  // Retrieve Audit Logs for this request and its work orders
+  const workOrderIds = request.assignments
+    .map((a) => a.workOrder?.id)
+    .filter(Boolean) as string[];
+
+  const auditLogs = await prisma.auditLog.findMany({
+    where: {
+      OR: [
+        { entityType: 'SERVICE_REQUEST', entityId: id },
+        ...(workOrderIds.length > 0 ? [{ entityType: 'WORK_ORDER' as any, entityId: { in: workOrderIds } }] : []),
+      ],
+    },
+    include: { user: { select: { id: true, name: true, role: true } } },
+    orderBy: { createdAt: 'asc' },
+  });
+
+  // Construct events list
+  const events: any[] = [
+    {
+      id: `evt-created`,
+      stage: 'REQUEST_SUBMITTED',
+      title: 'Service Request Created',
+      description: `Request "${request.title}" submitted by ${request.customer?.name || 'Customer'}`,
+      timestamp: request.createdAt,
+      actor: request.customer?.name,
+      role: 'CUSTOMER',
+    },
+  ];
+
+  if (activeAssignment) {
+    events.push({
+      id: `evt-assign-${activeAssignment.id}`,
+      stage: 'TECHNICIAN_ASSIGNED',
+      title: 'Technician Assigned',
+      description: `Technician ${activeAssignment.technician?.user?.name || 'Assigned'} was assigned to this request`,
+      timestamp: activeAssignment.createdAt,
+      actor: activeAssignment.technician?.user?.name,
+      role: 'TECHNICIAN',
+    });
+  }
+
+  if (activeSchedule) {
+    events.push({
+      id: `evt-sched-${activeSchedule.id}`,
+      stage: 'VISIT_SCHEDULED',
+      title: 'Visit Scheduled',
+      description: `Service visit scheduled for ${new Date(activeSchedule.startAt).toLocaleString()}`,
+      timestamp: activeSchedule.createdAt,
+    });
+  }
+
+  if (activeWorkOrder?.startedAt) {
+    events.push({
+      id: `evt-started`,
+      stage: 'WORK_IN_PROGRESS',
+      title: 'Work In Progress',
+      description: 'Technician arrived and began service work',
+      timestamp: activeWorkOrder.startedAt,
+    });
+  }
+
+  if (activeWorkOrder?.completedAt) {
+    events.push({
+      id: `evt-completed`,
+      stage: 'WORK_COMPLETED',
+      title: 'Work Completed',
+      description: 'Technician marked service work as completed',
+      timestamp: activeWorkOrder.completedAt,
+    });
+  }
+
+  if (activeInvoice) {
+    events.push({
+      id: `evt-invoice`,
+      stage: 'INVOICE_ISSUED',
+      title: 'Invoice Issued',
+      description: `Invoice ${activeInvoice.invoiceNumber} issued for ${activeInvoice.currency} ${activeInvoice.totalAmount}`,
+      timestamp: activeInvoice.issuedAt || activeInvoice.createdAt,
+    });
+
+    const successfulPayment = activeInvoice.payments?.find((p) => p.status === 'SUCCESS');
+    if (successfulPayment || activeInvoice.status === 'PAID') {
+      events.push({
+        id: `evt-payment`,
+        stage: 'PAYMENT_COMPLETED',
+        title: 'Payment Completed',
+        description: `Payment of ${activeInvoice.currency} ${activeInvoice.totalAmount} completed successfully`,
+        timestamp: successfulPayment?.processedAt || activeInvoice.paidAt || activeInvoice.updatedAt,
+      });
+    }
+  }
+
+  // Define full stage progress
+  const stages = [
+    {
+      key: 'REQUEST_SUBMITTED',
+      label: 'Request Submitted',
+      isCompleted: true,
+      timestamp: request.createdAt,
+    },
+    {
+      key: 'UNDER_REVIEW',
+      label: 'Under Review',
+      isCompleted: ['UNDER_REVIEW', 'APPROVED', 'ASSIGNED', 'SCHEDULED', 'COMPLETED', 'INVOICED', 'PAID', 'CLOSED'].includes(request.status),
+      isCurrent: request.status === 'UNDER_REVIEW',
+    },
+    {
+      key: 'APPROVED',
+      label: 'Approved',
+      isCompleted: ['APPROVED', 'ASSIGNED', 'SCHEDULED', 'COMPLETED', 'INVOICED', 'PAID', 'CLOSED'].includes(request.status),
+      isCurrent: request.status === 'APPROVED',
+    },
+    {
+      key: 'TECHNICIAN_ASSIGNED',
+      label: 'Technician Assigned',
+      isCompleted: Boolean(activeAssignment && ['ACCEPTED', 'SCHEDULED', 'PENDING'].includes(activeAssignment.status)),
+      isCurrent: request.status === 'ASSIGNED',
+      meta: activeAssignment?.technician?.user ? { name: activeAssignment.technician.user.name, image: activeAssignment.technician.user.image } : null,
+    },
+    {
+      key: 'VISIT_SCHEDULED',
+      label: 'Visit Scheduled',
+      isCompleted: Boolean(activeSchedule && !activeSchedule.cancelledAt),
+      isCurrent: request.status === 'SCHEDULED' && (!activeWorkOrder || activeWorkOrder.status === 'SCHEDULED'),
+      meta: activeSchedule ? { startAt: activeSchedule.startAt, endAt: activeSchedule.endAt } : null,
+    },
+    {
+      key: 'WORK_IN_PROGRESS',
+      label: 'Work In Progress',
+      isCompleted: ['IN_PROGRESS', 'COMPLETED'].includes(activeWorkOrder?.status || ''),
+      isCurrent: activeWorkOrder?.status === 'IN_PROGRESS',
+    },
+    {
+      key: 'WORK_COMPLETED',
+      label: 'Work Completed',
+      isCompleted: activeWorkOrder?.status === 'COMPLETED' || ['COMPLETED', 'INVOICED', 'PAID', 'CLOSED'].includes(request.status),
+      isCurrent: activeWorkOrder?.status === 'COMPLETED' && (!activeInvoice || activeInvoice.status === 'DRAFT'),
+      timestamp: activeWorkOrder?.completedAt,
+    },
+    {
+      key: 'INVOICE_ISSUED',
+      label: 'Invoice Issued',
+      isCompleted: Boolean(activeInvoice && activeInvoice.status !== 'DRAFT'),
+      isCurrent: Boolean(activeInvoice && activeInvoice.status === 'PENDING'),
+      meta: activeInvoice ? { invoiceNumber: activeInvoice.invoiceNumber, totalAmount: activeInvoice.totalAmount, currency: activeInvoice.currency } : null,
+    },
+    {
+      key: 'PAYMENT_COMPLETED',
+      label: 'Payment Completed',
+      isCompleted: activeInvoice?.status === 'PAID' || request.status === 'PAID',
+      isCurrent: activeInvoice?.status === 'PAID' || request.status === 'PAID',
+    },
+  ];
+
+  sendSuccess(res, {
+    request,
+    currentStatus: request.status,
+    stages,
+    events,
+    auditLogs,
+  }, 'Service timeline retrieved successfully');
+});
+
+export const rescheduleServiceRequest = asyncHandler(async (req: any, res: Response) => {
+  const { userId } = req.user;
+  const { id } = req.params;
+  const { preferredDateTime, reason } = req.body;
+
+  if (!preferredDateTime) {
+    throw new ApiError(400, 'Preferred date and time is required for rescheduling');
+  }
+
+  const newDateTime = new Date(preferredDateTime);
+  if (isNaN(newDateTime.getTime()) || newDateTime <= new Date()) {
+    throw new ApiError(400, 'Rescheduled appointment must be set to a future date and time');
+  }
+
+  const existing = await prisma.serviceRequest.findFirst({
+    where: { id, customerId: userId, deletedAt: null },
+    include: {
+      assignments: {
+        where: { status: { not: 'CANCELLED' } },
+        include: { schedule: true },
+      },
+    },
+  });
+
+  if (!existing) {
+    throw new ApiError(404, 'Service request not found');
+  }
+
+  if (['COMPLETED', 'CANCELLED', 'REJECTED', 'CLOSED', 'INVOICED', 'PAID'].includes(existing.status)) {
+    throw new ApiError(400, `Cannot reschedule request in "${existing.status}" status`);
+  }
+
+  const updated = await prisma.$transaction(async (tx) => {
+    const updatedSr = await tx.serviceRequest.update({
+      where: { id },
+      data: {
+        preferredDateTime: newDateTime,
+        adminNotes: reason ? `Customer rescheduled: ${reason}` : existing.adminNotes,
+      },
+      include: { serviceType: { include: { category: true } } },
+    });
+
+    // If an active schedule exists, adjust it
+    const activeAssignment = existing.assignments[0];
+    if (activeAssignment?.schedule) {
+      const duration = activeAssignment.schedule.endAt.getTime() - activeAssignment.schedule.startAt.getTime();
+      const newEnd = new Date(newDateTime.getTime() + (duration > 0 ? duration : 2 * 60 * 60 * 1000));
+
+      await tx.schedule.update({
+        where: { id: activeAssignment.schedule.id },
+        data: {
+          startAt: newDateTime,
+          endAt: newEnd,
+        },
+      });
+    }
+
+    return updatedSr;
+  });
+
+  await createAuditLog({
+    userId,
+    action: 'SERVICE_REQUEST_RESCHEDULED',
+    entityType: 'SERVICE_REQUEST',
+    entityId: id,
+    oldValues: { preferredDateTime: existing.preferredDateTime },
+    newValues: { preferredDateTime: newDateTime, reason },
+    ipAddress: getClientIp(req),
+    userAgent: req.headers['user-agent'] as string | undefined,
+  });
+
+  sendSuccess(res, updated, 'Service request rescheduled successfully');
+});
+
+export const rebookServiceRequest = asyncHandler(async (req: any, res: Response) => {
+  const { userId } = req.user;
+  const { id } = req.params;
+  const { preferredDateTime, location, latitude, longitude, description } = req.body;
+
+  const historical = await prisma.serviceRequest.findFirst({
+    where: { id, customerId: userId, deletedAt: null },
+    include: { serviceType: true },
+  });
+
+  if (!historical) {
+    throw new ApiError(404, 'Historical service request not found');
+  }
+
+  if (!historical.serviceType.isActive || historical.serviceType.deletedAt) {
+    throw new ApiError(400, 'The service type for this request is currently not offered');
+  }
+
+  const targetDateTime = preferredDateTime ? new Date(preferredDateTime) : undefined;
+  if (targetDateTime && (isNaN(targetDateTime.getTime()) || targetDateTime <= new Date())) {
+    throw new ApiError(400, 'Preferred appointment must be in the future');
+  }
+
+  const newRequest = await prisma.serviceRequest.create({
+    data: {
+      customerId: userId,
+      serviceTypeId: historical.serviceTypeId,
+      title: `Rebooking: ${historical.title.replace(/^Rebooking:\s*/, '')}`,
+      description: description || historical.description,
+      location: location || historical.location,
+      latitude: latitude !== undefined ? latitude : historical.latitude,
+      longitude: longitude !== undefined ? longitude : historical.longitude,
+      preferredDateTime: targetDateTime,
+      status: 'PENDING',
+    },
+    include: {
+      serviceType: { include: { category: true } },
+    },
+  });
+
+  await createAuditLog({
+    userId,
+    action: 'SERVICE_REQUEST_REBOOKED',
+    entityType: 'SERVICE_REQUEST',
+    entityId: newRequest.id,
+    oldValues: { rebookedFromId: id },
+    newValues: newRequest,
+    ipAddress: getClientIp(req),
+    userAgent: req.headers['user-agent'] as string | undefined,
+  });
+
+  sendCreated(res, newRequest, 'Service rebooked successfully as a new request');
+});
+

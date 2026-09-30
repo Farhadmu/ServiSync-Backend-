@@ -96,6 +96,8 @@ enum NotificationType {
   PAYMENT_SUCCESS
   PAYMENT_FAILED
   FEEDBACK_REQUEST
+  SUPPORT_TICKET
+  QUOTE_UPDATE
   SYSTEM
 }
 
@@ -114,6 +116,9 @@ enum AuditEntity {
   FEEDBACK
   SCHEDULE
   WEBSITE_CONTENT
+  CUSTOMER_ADDRESS
+  SUPPORT_TICKET
+  SERVICE_QUOTE
 }
 
 // ──────────────────────────────────────────────────────────────────────
@@ -144,6 +149,9 @@ model User {
   feedbackAsCustomer   Feedback[]         @relation("FeedbackCustomer")
   feedbackAsTechnician Feedback[]         @relation("FeedbackTechnician")
   payments             Payment[]          @relation("PaymentCustomer")
+  customerAddresses    CustomerAddress[]  @relation("CustomerAddresses")
+  supportTickets       SupportTicket[]    @relation("CustomerSupportTickets")
+  ticketMessages       SupportTicketMessage[] @relation("UserTicketMessages")
 
   @@index([role])
   @@index([isActive])
@@ -303,6 +311,8 @@ model ServiceRequest {
   customer    User         @relation("CustomerServiceRequests", fields: [customerId], references: [id])
   serviceType ServiceType  @relation(fields: [serviceTypeId], references: [id])
   assignments Assignment[]
+  supportTickets SupportTicket[]
+  quotes         ServiceQuote[]
 
   @@index([customerId])
   @@index([status])
@@ -585,5 +595,138 @@ model WebsiteContent {
   @@index([sectionKey])
   @@index([isPublished])
   @@index([order])
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// CUSTOMER ADDRESSES
+// ──────────────────────────────────────────────────────────────────────
+
+enum AddressLabel {
+  HOME
+  OFFICE
+  OTHER
+}
+
+model CustomerAddress {
+  id        String       @id @default(cuid())
+  userId    String
+  label     AddressLabel @default(HOME)
+  address   String
+  city      String?
+  area      String?
+  latitude  Float?
+  longitude Float?
+  isDefault Boolean      @default(false)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  user User @relation("CustomerAddresses", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userId, isDefault])
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// SUPPORT TICKETS & COMPLAINTS
+// ──────────────────────────────────────────────────────────────────────
+
+enum SupportTicketCategory {
+  BOOKING_ISSUE
+  TECHNICIAN_ISSUE
+  BILLING_ISSUE
+  PAYMENT_ISSUE
+  OTHER
+}
+
+enum SupportTicketStatus {
+  OPEN
+  IN_PROGRESS
+  WAITING_FOR_CUSTOMER
+  RESOLVED
+  CLOSED
+}
+
+enum SupportTicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+model SupportTicket {
+  id               String                 @id @default(cuid())
+  ticketNumber     String                 @unique
+  customerId       String
+  serviceRequestId String?
+  category         SupportTicketCategory  @default(OTHER)
+  priority         SupportTicketPriority  @default(MEDIUM)
+  status           SupportTicketStatus    @default(OPEN)
+  subject          String
+  description      String
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
+  closedAt         DateTime?
+
+  customer       User                   @relation("CustomerSupportTickets", fields: [customerId], references: [id])
+  serviceRequest ServiceRequest?        @relation(fields: [serviceRequestId], references: [id])
+  messages       SupportTicketMessage[]
+
+  @@index([customerId])
+  @@index([status])
+  @@index([category])
+  @@index([serviceRequestId])
+}
+
+model SupportTicketMessage {
+  id           String        @id @default(cuid())
+  ticketId     String
+  senderId     String
+  message      String
+  isStaffReply Boolean       @default(false)
+  createdAt    DateTime      @default(now())
+
+  ticket SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  sender User          @relation("UserTicketMessages", fields: [senderId], references: [id])
+
+  @@index([ticketId])
+  @@index([senderId])
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// SERVICE QUOTES / ESTIMATES
+// ──────────────────────────────────────────────────────────────────────
+
+enum QuoteStatus {
+  DRAFT
+  PENDING
+  ACCEPTED
+  CHANGE_REQUESTED
+  REJECTED
+  EXPIRED
+}
+
+model ServiceQuote {
+  id                 String      @id @default(cuid())
+  serviceRequestId   String
+  quoteNumber        String      @unique
+  version            Int         @default(1)
+  status             QuoteStatus @default(PENDING)
+  items              Json?
+  subtotal           Decimal     @db.Decimal(12, 2)
+  taxAmount          Decimal     @default(0) @db.Decimal(12, 2)
+  discountAmount     Decimal     @default(0) @db.Decimal(12, 2)
+  totalAmount        Decimal     @db.Decimal(12, 2)
+  currency           String      @default("BDT")
+  notes              String?
+  expiresAt          DateTime?
+  customerResponseAt DateTime?
+  customerComment    String?
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+
+  serviceRequest ServiceRequest @relation(fields: [serviceRequestId], references: [id], onDelete: Cascade)
+
+  @@index([serviceRequestId])
+  @@index([status])
 }
 

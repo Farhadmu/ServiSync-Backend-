@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getTechnicians, getTechnicianById } from './technician.controller';
+import { getTechnicians, getTechnicianById, getPublicTechnicianProfile } from './technician.controller';
 import { getMyProfile, updateMyProfile, updateMyAvailability, updateMySkills, getMyJobs, getMySchedule } from './technicianProfile.controller';
 import { authenticate, authorize } from '../../middlewares/authenticate';
 
@@ -15,6 +15,9 @@ router.patch('/me/availability', techOnly, updateMyAvailability);
 router.patch('/me/skills', techOnly, updateMySkills);
 router.get('/me/jobs', techOnly, getMyJobs);
 router.get('/me/schedule', techOnly, getMySchedule);
+
+// Public technician profile (accessible by authenticated customers/users)
+router.get('/:id/public-profile', authenticate, getPublicTechnicianProfile);
 
 // General technician endpoints (accessible by Managers, Admins, etc.)
 router.get('/', authenticate, getTechnicians);

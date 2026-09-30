@@ -1,5 +1,18 @@
 import { Router } from 'express';
-import { createServiceRequest, getServiceRequests, getServiceRequestById, updateServiceRequest, deleteServiceRequest, reviewServiceRequest, cancelServiceRequest, uploadServiceRequestAttachment } from './serviceRequest.controller';
+import {
+  createServiceRequest,
+  getServiceRequests,
+  getServiceRequestById,
+  updateServiceRequest,
+  deleteServiceRequest,
+  reviewServiceRequest,
+  cancelServiceRequest,
+  uploadServiceRequestAttachment,
+  getAvailableSlots,
+  getServiceTimeline,
+  rescheduleServiceRequest,
+  rebookServiceRequest,
+} from './serviceRequest.controller';
 import { authenticate, authorize } from '../../middlewares/authenticate';
 import { validateRequest } from '../../middlewares/validateRequest';
 import { z } from 'zod';
@@ -34,13 +47,20 @@ const reviewSchema = z.object({
   rejectionReason: z.string().optional(),
 });
 
+// Available slots lookup (MUST come before /:id)
+router.get('/available-slots', authenticate, getAvailableSlots);
+
 router.post('/', authenticate, authorize('CUSTOMER'), validateRequest({ body: createServiceRequestSchema }), createServiceRequest);
 router.get('/', authenticate, getServiceRequests);
 router.get('/:id', authenticate, getServiceRequestById);
+router.get('/:id/timeline', authenticate, getServiceTimeline);
 router.patch('/:id', authenticate, authorize('CUSTOMER'), validateRequest({ body: updateServiceRequestSchema }), updateServiceRequest);
 router.delete('/:id', authenticate, authorize('CUSTOMER'), deleteServiceRequest);
 router.post('/:id/review', authenticate, authorize('MANAGER', 'ADMIN'), validateRequest({ body: reviewSchema }), reviewServiceRequest);
 router.post('/:id/cancel', authenticate, cancelServiceRequest);
+router.post('/:id/reschedule', authenticate, authorize('CUSTOMER'), rescheduleServiceRequest);
+router.post('/:id/rebook', authenticate, authorize('CUSTOMER'), rebookServiceRequest);
 router.post('/:id/attachments', authenticate, authorize('CUSTOMER'), uploadLimiter, singleUpload('file'), uploadServiceRequestAttachment);
 
 export default router;
+
