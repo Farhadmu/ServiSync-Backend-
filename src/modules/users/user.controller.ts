@@ -1,12 +1,10 @@
 import { Response, NextFunction } from 'express';
-import bcrypt from 'bcrypt';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { ApiError } from '../../utils/ApiError';
 import { asyncHandler } from '../../utils/asyncHandler';
 import { sendSuccess } from '../../utils/response';
-import { authenticate, authorize } from '../../middlewares/authenticate';
-import type { RequestUser } from '../../middlewares/authenticate';
+import { authenticate, authorize, RequestUser } from '../../middlewares/authenticate';
 import { validateRequest } from '../../middlewares/validateRequest';
 import { z } from 'zod';
 import { createAuditLog, getClientIp } from '../../utils/auditLog';
@@ -55,33 +53,15 @@ export const getMe = asyncHandler(async (req: any, res: Response) => {
 export const updateMe = [
   validateRequest({ body: updateProfileSchema }),
   asyncHandler(async (req: any, res: Response, next: NextFunction) => {
-    const { name, image, phone, address } = req.body;
-    const updateData: any = {};
-    if (name !== undefined) updateData.name = name;
-    if (image !== undefined) updateData.image = image;
-
-    if (phone !== undefined || address !== undefined) {
-      updateData.customerProfile = {
-        upsert: {
-          create: { phone, address },
-          update: {
-            ...(phone !== undefined && { phone }),
-            ...(address !== undefined && { address }),
-          },
-        },
-      };
-    }
-
     const user = await prisma.user.update({
       where: { id: req.user!.userId },
-      data: updateData,
+      data: req.body,
       select: {
         id: true,
         email: true,
         name: true,
         role: true,
         image: true,
-        customerProfile: true,
       },
     });
 
@@ -110,12 +90,12 @@ export const changePassword = [
       throw new ApiError(404, 'User not found');
     }
 
-    const isCurrentValid = await bcrypt.compare(req.body.currentPassword, user.password);
+    const isCurrentValid = await require('bcrypt').compare(req.body.currentPassword, user.password);
     if (!isCurrentValid) {
       throw new ApiError(400, 'Current password is incorrect');
     }
 
-    const hashedPassword = await bcrypt.hash(req.body.newPassword, 12);
+    const hashedPassword = await require('bcrypt').hash(req.body.newPassword, 12);
     await prisma.user.update({
       where: { id: req.user!.userId },
       data: { password: hashedPassword },

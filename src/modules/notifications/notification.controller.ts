@@ -4,14 +4,11 @@ import { prisma } from '../../lib/prisma';
 import { ApiError } from '../../utils/ApiError';
 import { asyncHandler } from '../../utils/asyncHandler';
 import { sendSuccess } from '../../utils/response';
-import { authenticate } from '../../middlewares/authenticate';
-import type { RequestUser } from '../../middlewares/authenticate';
+import { authenticate, RequestUser } from '../../middlewares/authenticate';
 
 export const getNotifications = asyncHandler(async (req: any, res: Response) => {
   const { page = 1, limit = 20, unreadOnly } = req.query;
-  const pageNum = Math.max(1, parseInt(page as string) || 1);
-  const limitNum = Math.min(100, Math.max(1, parseInt(limit as string) || 20));
-  const skip = (pageNum - 1) * limitNum;
+  const skip = (parseInt(page as string) - 1) * parseInt(limit as string);
 
   const where: Prisma.NotificationWhereInput = { userId: req.user!.userId };
   if (unreadOnly === 'true') where.isRead = false;
@@ -20,7 +17,7 @@ export const getNotifications = asyncHandler(async (req: any, res: Response) => 
     prisma.notification.findMany({
       where,
       skip,
-      take: limitNum,
+      take: parseInt(limit as string),
       orderBy: { createdAt: 'desc' },
     }),
     prisma.notification.count({ where }),
@@ -29,10 +26,10 @@ export const getNotifications = asyncHandler(async (req: any, res: Response) => 
   const unreadCount = await prisma.notification.count({ where: { userId: req.user!.userId, isRead: false } });
 
   sendSuccess(res, { notifications, unreadCount }, 'Notifications fetched successfully', {
-    page: pageNum,
-    limit: limitNum,
+    page: parseInt(page as string),
+    limit: parseInt(limit as string),
     total,
-    totalPages: Math.ceil(total / limitNum),
+    totalPages: Math.ceil(total / parseInt(limit as string)),
   });
 });
 
@@ -49,13 +46,4 @@ export const markNotificationAsRead = asyncHandler(async (req: any, res: Respons
   });
 
   sendSuccess(res, updated, 'Notification marked as read');
-});
-
-export const markAllNotificationsAsRead = asyncHandler(async (req: any, res: Response) => {
-  await prisma.notification.updateMany({
-    where: { userId: req.user!.userId, isRead: false },
-    data: { isRead: true },
-  });
-
-  sendSuccess(res, null, 'All notifications marked as read');
 });

@@ -32,3 +32,4 @@ export type RequestUser = {
   email: string;
   role: 'CUSTOMER' | 'TECHNICIAN' | 'MANAGER' | 'ADMIN';
 };
+export const RequestUser = {};

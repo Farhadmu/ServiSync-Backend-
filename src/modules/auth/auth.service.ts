@@ -1,14 +1,14 @@
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
-import { Prisma, Role, CustomerProfile, TechnicianProfile } from '@prisma/client';
+import { Prisma } from '@prisma/client';
+import { PrismaClient } from '@prisma/client';
 import { env } from '../../config/env';
-import { generateAccessToken, generateRefreshToken } from '../../utils/jwt';
-import type { RequestUser } from '../../utils/jwt';
+import { generateAccessToken, generateRefreshToken, RequestUser } from '../../utils/jwt';
 import { ApiError } from '../../utils/ApiError';
 import { createAuditLog, getClientIp } from '../../utils/auditLog';
+import { Role, CustomerProfile, TechnicianProfile } from '@prisma/client';
 import { z } from 'zod';
-import { prisma as sharedPrisma } from '../../lib/prisma';
 
 export const registerSchema = z.object({
   email: z.string().email('Invalid email address'),
@@ -40,7 +40,11 @@ export interface AuthResponse {
 }
 
 export class AuthService {
-  private prisma = sharedPrisma;
+  private prisma: PrismaClient;
+
+  constructor() {
+    this.prisma = new PrismaClient();
+  }
 
   async register(data: RegisterInput, ip?: string, userAgent?: string): Promise<AuthResponse> {
     const existingUser = await this.prisma.user.findUnique({
@@ -152,11 +156,6 @@ export class AuthService {
         where: { tokenHash: this.hashToken(refreshToken), userId, revokedAt: null },
         data: { revokedAt: new Date() },
       });
-    } else {
-      await this.prisma.refreshToken.updateMany({
-        where: { userId, revokedAt: null },
-        data: { revokedAt: new Date() },
-      });
     }
 
     await createAuditLog({
@@ -173,7 +172,7 @@ export class AuthService {
     const tokenHash = this.hashToken(refreshToken);
     const storedToken = await this.prisma.refreshToken.findUnique({
       where: { tokenHash },
-      include: { user: { select: { id: true, name: true, email: true, role: true, image: true, isActive: true, deletedAt: true, createdAt: true } } },
+      include: { user: true },
     });
 
     if (!storedToken || storedToken.revokedAt || new Date() > storedToken.expiresAt) {
@@ -228,19 +227,13 @@ export class AuthService {
           name: payload.name,
           password: await bcrypt.hash(Math.random().toString(36), 12),
           role: 'CUSTOMER',
-          isActive: true,
           isEmailVerified: true,
           image: payload.picture || undefined,
           customerProfile: { create: {} },
         },
       });
-    } else {
-      if (user.deletedAt) {
-        throw new ApiError(401, 'Account has been deleted');
-      }
-      if (!user.isActive) {
-        throw new ApiError(403, 'Account is deactivated');
-      }
+    } else if (user.deletedAt) {
+      throw new ApiError(403, 'Account is deactivated');
     }
 
     await createAuditLog({

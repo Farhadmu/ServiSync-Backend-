@@ -1,8 +1,10 @@
 import { Router } from 'express';
-import { createServiceRequest, getServiceRequests, getServiceRequestById, updateServiceRequest, deleteServiceRequest, reviewServiceRequest, cancelServiceRequest } from './serviceRequest.controller';
+import { createServiceRequest, getServiceRequests, getServiceRequestById, updateServiceRequest, deleteServiceRequest, reviewServiceRequest, cancelServiceRequest, uploadServiceRequestAttachment } from './serviceRequest.controller';
 import { authenticate, authorize } from '../../middlewares/authenticate';
 import { validateRequest } from '../../middlewares/validateRequest';
 import { z } from 'zod';
+import { singleUpload } from '../../middlewares/upload';
+import { uploadLimiter } from '../../middlewares/rateLimiter';
 
 const router = Router();
 
@@ -39,5 +41,6 @@ router.patch('/:id', authenticate, authorize('CUSTOMER'), validateRequest({ body
 router.delete('/:id', authenticate, authorize('CUSTOMER'), deleteServiceRequest);
 router.post('/:id/review', authenticate, authorize('MANAGER', 'ADMIN'), validateRequest({ body: reviewSchema }), reviewServiceRequest);
 router.post('/:id/cancel', authenticate, cancelServiceRequest);
+router.post('/:id/attachments', authenticate, authorize('CUSTOMER'), uploadLimiter, singleUpload('file'), uploadServiceRequestAttachment);
 
 export default router;

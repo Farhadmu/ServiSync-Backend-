@@ -23,12 +23,3 @@ export const uploadLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
 });
-
-export const paymentLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 20,
-  message: { success: false, message: 'Too many payment requests, please try again later', errors: [] },
-  standardHeaders: true,
-  legacyHeaders: false,
-});
-

@@ -4,22 +4,17 @@ import { Prisma } from '@prisma/client';
 import prisma from '../../lib/prisma';
 import { ApiError } from '../../utils/ApiError';
 import { asyncHandler } from '../../utils/asyncHandler';
-import { sendSuccess, sendCreated } from '../../utils/response';
-import { authenticate, authorize } from '../../middlewares/authenticate';
-import type { RequestUser } from '../../middlewares/authenticate';
+import { sendSuccess } from '../../utils/response';
+import { authenticate, authorize, RequestUser } from '../../middlewares/authenticate';
 import { validateRequest } from '../../middlewares/validateRequest';
 import { z } from 'zod';
 import { createAuditLog, getClientIp } from '../../utils/auditLog';
-import { createNotification } from '../../utils/notification';
 import { env } from '../../config/env';
-import { deleteCache } from '../../lib/redis';
-
-const DASHBOARD_STATS_CACHE_KEY = 'admin:dashboard-stats';
 
 let stripeClient: Stripe | null = null;
 function getStripe() {
   if (!stripeClient && env.STRIPE_SECRET_KEY) {
-    stripeClient = new Stripe(env.STRIPE_SECRET_KEY, { apiVersion: '2025-08-27.basil' as any });
+    stripeClient = new Stripe(env.STRIPE_SECRET_KEY, { apiVersion: '2025-08-27.basil' });
   }
   if (!stripeClient) throw new ApiError(500, 'Payment provider not configured');
   return stripeClient;
@@ -34,17 +29,14 @@ export const initiatePayment = [
   asyncHandler(async (req: any, res: Response) => {
     const invoice = await prisma.invoice.findFirst({
       where: { id: req.body.invoiceId, status: 'PENDING' },
-      include: { workOrder: { include: { assignment: { include: { serviceRequest: { include: { customer: { select: { id: true, name: true, email: true, role: true, image: true, isActive: true, createdAt: true } } } } } } } } },
+      include: { workOrder: { include: { assignment: { include: { serviceRequest: { include: { customer: true } } } } } } },
     });
 
-    if (!invoice) throw new ApiError(404, 'Invoice not found or not in payable state');
+    if (!invoice) throw new ApiError(404, 'Invoice not found or not payable');
     if (invoice.workOrder.assignment.serviceRequest.customerId !== req.user!.userId) {
-      throw new ApiError(403, 'Forbidden: You do not own this invoice');
+      throw new ApiError(403, 'You do not own this invoice');
     }
-
-    if (Number(invoice.dueAmount) <= 0) {
-      throw new ApiError(400, 'Invoice has no remaining due amount');
-    }
+    if (invoice.dueAmount.lessThanOrEqualTo(0)) throw new ApiError(400, 'Invoice has no outstanding balance');
 
     const existingPending = await prisma.payment.findFirst({
       where: { invoiceId: invoice.id, status: 'PENDING' },
@@ -54,7 +46,6 @@ export const initiatePayment = [
     }
 
     const stripe = getStripe();
-    const baseUrl = `${req.protocol}://${req.get('host')}`;
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
       payment_method_types: ['card'],
@@ -63,13 +54,13 @@ export const initiatePayment = [
           price_data: {
             currency: invoice.currency.toLowerCase(),
             product_data: { name: `Invoice ${invoice.invoiceNumber}` },
-            unit_amount: Math.round(Number(invoice.dueAmount) * 100),
+            unit_amount: invoice.dueAmount.mul(100).toNumber(),
           },
           quantity: 1,
         },
       ],
-      success_url: `${baseUrl}/api/v1/payments/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${baseUrl}/api/v1/payments/cancel`,
+      success_url: `${env.FRONTEND_URL}/payment/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${env.FRONTEND_URL}/payment/cancel`,
       metadata: { invoiceId: invoice.id, customerId: req.user!.userId },
     });
 
@@ -90,7 +81,7 @@ export const initiatePayment = [
       action: 'PAYMENT_INITIATED',
       entityType: 'PAYMENT',
       entityId: payment.id,
-      newValues: { invoiceId: invoice.id, amount: invoice.dueAmount.toString(), providerSessionId: session.id },
+      newValues: { invoiceId: invoice.id, amount: invoice.totalAmount, providerSessionId: session.id },
       ipAddress: getClientIp(req),
       userAgent: req.headers['user-agent'] as string | undefined,
     });
@@ -101,22 +92,21 @@ export const initiatePayment = [
 
 export const handlePaymentSuccess = asyncHandler(async (req: any, res: Response) => {
   const { session_id } = req.query;
-  if (!session_id) throw new ApiError(400, 'session_id query parameter is required');
+  if (!session_id) throw new ApiError(400, 'session_id is required');
 
   const stripe = getStripe();
   const session = await stripe.checkout.sessions.retrieve(session_id as string);
 
   if (session.payment_status !== 'paid') {
-    throw new ApiError(400, 'Payment not completed on Stripe gateway');
+    throw new ApiError(400, 'Payment not completed');
   }
 
   const invoiceId = session.metadata?.invoiceId;
-  if (!invoiceId) throw new ApiError(400, 'Invalid session metadata: invoiceId missing');
+  if (!invoiceId) throw new ApiError(400, 'Invalid session metadata');
 
-  await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     const payment = await tx.payment.findFirst({
       where: { providerSessionId: session.id },
-      include: { invoice: true },
     });
 
     if (!payment) throw new ApiError(404, 'Payment record not found');
@@ -133,84 +123,33 @@ export const handlePaymentSuccess = asyncHandler(async (req: any, res: Response)
 
     await tx.invoice.update({
       where: { id: payment.invoiceId },
-      data: { status: 'PAID', paidAt: new Date(), dueAmount: new Prisma.Decimal(0) },
+      data: { status: 'PAID', paidAt: new Date() },
     });
 
-    const workOrder = await tx.workOrder.findFirst({
-      where: { invoice: { id: payment.invoiceId } },
-      include: { assignment: true },
-    });
+        const workOrder = await tx.workOrder.findFirst({
+          where: { invoice: { id: payment.invoiceId } },
+          include: { assignment: true },
+        });
 
     if (workOrder) {
-      // Advance to PAID
       await tx.serviceRequest.update({
         where: { id: workOrder.assignment.serviceRequestId },
-        data: { status: 'PAID' },
+        data: { status: 'CLOSED', closedAt: new Date() },
       });
     }
-
-    await createNotification(
-      {
-        userId: payment.customerId,
-        type: 'PAYMENT_SUCCESS',
-        title: 'Payment Confirmed',
-        message: `Your payment of ${payment.currency} ${payment.amount} for invoice #${payment.invoice.invoiceNumber} was successful.`,
-        entityType: 'PAYMENT',
-        entityId: payment.id,
-      },
-      tx
-    );
-
-    await createAuditLog(
-      {
-        userId: payment.customerId,
-        action: 'PAYMENT_SUCCESS',
-        entityType: 'PAYMENT',
-        entityId: payment.id,
-        newValues: { status: 'SUCCESS', providerPaymentId: session.payment_intent as string },
-        ipAddress: getClientIp(req),
-        userAgent: req.headers['user-agent'] as string | undefined,
-      },
-      tx
-    );
   });
 
-  await deleteCache(DASHBOARD_STATS_CACHE_KEY);
-  sendSuccess(res, null, 'Payment verified and recorded successfully');
+  sendSuccess(res, null, 'Payment verified successfully');
 });
 
 export const handlePaymentFail = asyncHandler(async (req: any, res: Response) => {
   const { session_id } = req.query;
   if (!session_id) throw new ApiError(400, 'session_id is required');
 
-  const payment = await prisma.payment.findFirst({
-    where: { providerSessionId: session_id as string },
-    include: { invoice: true },
-  });
-
-  if (payment && payment.status !== 'SUCCESS') {
-    await prisma.payment.update({
-      where: { id: payment.id },
-      data: { status: 'FAILED', failureReason: 'Payment failed at gateway' },
-    });
-
-    await createNotification({
-      userId: payment.customerId,
-      type: 'PAYMENT_FAILED',
-      title: 'Payment Failed',
-      message: `Your payment for invoice #${payment.invoice?.invoiceNumber || ''} could not be processed.`,
-      entityType: 'PAYMENT',
-      entityId: payment.id,
-    });
-
-    await createAuditLog({
-      userId: payment.customerId,
-      action: 'PAYMENT_FAILED',
-      entityType: 'PAYMENT',
-      entityId: payment.id,
-      ipAddress: getClientIp(req),
-      userAgent: req.headers['user-agent'] as string | undefined,
-    });
+  const payment = await prisma.payment.findFirst({ where: { providerSessionId: session_id as string } });
+  if (payment && payment.status === 'PENDING') {
+    await prisma.payment.update({ where: { id: payment.id }, data: { status: 'FAILED', failureReason: 'Payment failed at gateway' } });
+    await createAuditLog({ userId: payment.customerId, action: 'PAYMENT_FAILED', entityType: 'PAYMENT', entityId: payment.id, ipAddress: getClientIp(req), userAgent: req.headers['user-agent'] as string | undefined });
   }
 
   sendSuccess(res, null, 'Payment failure recorded');
@@ -221,7 +160,7 @@ export const handlePaymentCancel = asyncHandler(async (req: any, res: Response) 
   if (!session_id) throw new ApiError(400, 'session_id is required');
 
   const payment = await prisma.payment.findFirst({ where: { providerSessionId: session_id as string } });
-  if (payment && payment.status === 'PENDING') {
+  if (payment) {
     await prisma.payment.update({ where: { id: payment.id }, data: { status: 'CANCELLED' } });
   }
 
@@ -230,7 +169,7 @@ export const handlePaymentCancel = asyncHandler(async (req: any, res: Response) 
 
 export const handlePaymentWebhook = asyncHandler(async (req: any, res: Response) => {
   const sig = req.headers['stripe-signature'];
-  if (!sig || !env.STRIPE_WEBHOOK_SECRET) throw new ApiError(400, 'Invalid webhook signature or secret unconfigured');
+  if (!sig || !env.STRIPE_WEBHOOK_SECRET) throw new ApiError(400, 'Invalid webhook');
 
   let event: Stripe.Event;
   try {
@@ -244,11 +183,7 @@ export const handlePaymentWebhook = asyncHandler(async (req: any, res: Response)
     const session = event.data.object as Stripe.Checkout.Session;
     if (session.payment_status === 'paid') {
       await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-        const payment = await tx.payment.findFirst({
-          where: { providerSessionId: session.id },
-          include: { invoice: true },
-        });
-
+        const payment = await tx.payment.findFirst({ where: { providerSessionId: session.id } });
         if (!payment || payment.status === 'SUCCESS') return;
 
         await tx.payment.update({
@@ -256,78 +191,29 @@ export const handlePaymentWebhook = asyncHandler(async (req: any, res: Response)
           data: { status: 'SUCCESS', providerPaymentId: session.payment_intent as string, processedAt: new Date() },
         });
 
-        await tx.invoice.update({
-          where: { id: payment.invoiceId },
-          data: { status: 'PAID', paidAt: new Date(), dueAmount: new Prisma.Decimal(0) },
-        });
+        await tx.invoice.update({ where: { id: payment.invoiceId }, data: { status: 'PAID', paidAt: new Date() } });
 
-        const workOrder = await tx.workOrder.findFirst({
-          where: { invoice: { id: payment.invoiceId } },
-          include: { assignment: true },
-        });
-
+        const workOrder = await tx.workOrder.findFirst({ where: { invoice: { id: payment.invoiceId } }, include: { assignment: true } });
         if (workOrder) {
-          // Advance to PAID
-          await tx.serviceRequest.update({
-            where: { id: workOrder.assignment.serviceRequestId },
-            data: { status: 'PAID' },
-          });
+          await tx.serviceRequest.update({ where: { id: workOrder.assignment.serviceRequestId }, data: { status: 'CLOSED', closedAt: new Date() } });
         }
-
-        await createNotification(
-          {
-            userId: payment.customerId,
-            type: 'PAYMENT_SUCCESS',
-            title: 'Payment Confirmed',
-            message: `Your payment of ${payment.currency} ${payment.amount} for invoice #${payment.invoice.invoiceNumber} was successful.`,
-            entityType: 'PAYMENT',
-            entityId: payment.id,
-          },
-          tx
-        );
-
-        await createAuditLog(
-          {
-            userId: payment.customerId,
-            action: 'PAYMENT_SUCCESS',
-            entityType: 'PAYMENT',
-            entityId: payment.id,
-            newValues: { status: 'SUCCESS', providerPaymentId: session.payment_intent as string },
-          },
-          tx
-        );
       });
     }
   }
 
-  await deleteCache(DASHBOARD_STATS_CACHE_KEY);
   res.status(200).json({ received: true });
 });
 
 export const getPaymentById = asyncHandler(async (req: any, res: Response) => {
   const payment = await prisma.payment.findFirst({
     where: { id: req.params.id },
-    include: {
-      invoice: {
-        include: {
-          workOrder: {
-            include: {
-              assignment: {
-                include: {
-                   serviceRequest: { include: { customer: { select: { id: true, name: true, email: true, role: true, image: true, isActive: true, createdAt: true } } } },
-                },
-              },
-            },
-          },
-        },
-      },
-    },
+    include: { invoice: { include: { workOrder: { include: { assignment: { include: { serviceRequest: { include: { customer: true } } } } } } } } },
   });
 
   if (!payment) throw new ApiError(404, 'Payment not found');
 
   if (req.user!.role === 'CUSTOMER' && payment.customerId !== req.user!.userId) {
-    throw new ApiError(403, 'Access denied: You do not own this payment');
+    throw new ApiError(403, 'Access denied');
   }
 
   sendSuccess(res, payment, 'Payment fetched successfully');

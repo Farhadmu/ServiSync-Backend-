@@ -4,32 +4,24 @@ import prisma from '../../lib/prisma';
 import { ApiError } from '../../utils/ApiError';
 import { asyncHandler } from '../../utils/asyncHandler';
 import { sendSuccess, sendCreated } from '../../utils/response';
-import { authenticate, authorize } from '../../middlewares/authenticate';
-import type { RequestUser } from '../../middlewares/authenticate';
+import { authenticate, authorize, RequestUser } from '../../middlewares/authenticate';
 import { validateRequest } from '../../middlewares/validateRequest';
 import { z } from 'zod';
 import { createAuditLog, getClientIp } from '../../utils/auditLog';
-import { createNotification } from '../../utils/notification';
 
-export const generateInvoiceSchema = z.object({
-  items: z
-    .array(
-      z.object({
-        description: z.string().min(1, 'Description is required'),
-        quantity: z.coerce.number().positive('Quantity must be positive'),
-        unitPrice: z.coerce.number().nonnegative('Unit price cannot be negative'),
-      })
-    )
-    .min(1, 'At least one invoice item is required'),
-  taxAmount: z.coerce.number().nonnegative('Tax amount cannot be negative').default(0),
-  discountAmount: z.coerce.number().nonnegative('Discount amount cannot be negative').default(0),
+const generateInvoiceSchema = z.object({
+  items: z.array(z.object({
+    description: z.string(),
+    quantity: z.coerce.number().positive(),
+    unitPrice: z.coerce.number().nonnegative(),
+  })),
+  taxAmount: z.coerce.number().nonnegative().default(0),
+  discountAmount: z.coerce.number().nonnegative().default(0),
 });
 
 export const getInvoices = asyncHandler(async (req: any, res: Response) => {
   const { page = 1, limit = 10, status } = req.query;
-  const pageNum = Math.max(1, parseInt(page as string) || 1);
-  const limitNum = Math.min(100, Math.max(1, parseInt(limit as string) || 10));
-  const skip = (pageNum - 1) * limitNum;
+  const skip = (parseInt(page as string) - 1) * parseInt(limit as string);
 
   const where: Prisma.InvoiceWhereInput = {};
   if (req.user!.role === 'CUSTOMER') {
@@ -41,19 +33,9 @@ export const getInvoices = asyncHandler(async (req: any, res: Response) => {
     prisma.invoice.findMany({
       where,
       skip,
-      take: limitNum,
+      take: parseInt(limit as string),
       include: {
-        workOrder: {
-          include: {
-            assignment: {
-              include: {
-                 serviceRequest: { include: { customer: { select: { id: true, name: true, email: true, role: true, image: true, isActive: true, createdAt: true } }, serviceType: { include: { category: true } } } },
-                 technician: { include: { user: { select: { id: true, name: true, email: true, role: true, image: true, isActive: true, createdAt: true } } } },
-              },
-            },
-            serviceReport: true,
-          },
-        },
+        workOrder: { include: { assignment: { include: { serviceRequest: { include: { customer: true } } } } } },
         items: true,
         payments: true,
       },
@@ -63,10 +45,10 @@ export const getInvoices = asyncHandler(async (req: any, res: Response) => {
   ]);
 
   sendSuccess(res, invoices, 'Invoices fetched successfully', {
-    page: pageNum,
-    limit: limitNum,
+    page: parseInt(page as string),
+    limit: parseInt(limit as string),
     total,
-    totalPages: Math.ceil(total / limitNum),
+    totalPages: Math.ceil(total / parseInt(limit as string)),
   });
 });
 
@@ -74,17 +56,7 @@ export const getInvoiceById = asyncHandler(async (req: any, res: Response) => {
   const invoice = await prisma.invoice.findFirst({
     where: { id: req.params.id },
     include: {
-      workOrder: {
-        include: {
-          assignment: {
-            include: {
-              serviceRequest: { include: { customer: { select: { id: true, name: true, email: true, role: true, image: true, isActive: true, createdAt: true } }, serviceType: { include: { category: true } } } },
-              technician: { include: { user: { select: { id: true, name: true, email: true, role: true, image: true, isActive: true, createdAt: true } } } },
-            },
-          },
-          serviceReport: true,
-        },
-      },
+      workOrder: { include: { assignment: { include: { serviceRequest: { include: { customer: true } } } } } },
       items: true,
       payments: true,
     },
@@ -93,7 +65,7 @@ export const getInvoiceById = asyncHandler(async (req: any, res: Response) => {
   if (!invoice) throw new ApiError(404, 'Invoice not found');
 
   if (req.user!.role === 'CUSTOMER' && invoice.workOrder.assignment.serviceRequest.customerId !== req.user!.userId) {
-    throw new ApiError(403, 'Access denied: You do not own this invoice');
+    throw new ApiError(403, 'Access denied');
   }
 
   sendSuccess(res, invoice, 'Invoice fetched successfully');
@@ -102,98 +74,64 @@ export const getInvoiceById = asyncHandler(async (req: any, res: Response) => {
 export const generateInvoice = asyncHandler(async (req: any, res: Response) => {
   const workOrder = await prisma.workOrder.findFirst({
     where: { id: req.params.workOrderId },
-    include: {
-      invoice: true,
-      serviceReport: true,
-      assignment: { include: { serviceRequest: true } },
-    },
+    include: { invoice: true, assignment: { include: { serviceRequest: true } } },
   });
 
   if (!workOrder) throw new ApiError(404, 'Work order not found');
-  if (workOrder.status !== 'COMPLETED') {
-    throw new ApiError(400, 'Work order must be completed to generate invoice');
-  }
-  if (!workOrder.serviceReport) {
-    throw new ApiError(400, 'A service report must be submitted before generating an invoice');
-  }
-  if (workOrder.invoice) {
-    throw new ApiError(409, 'Invoice already exists for this work order');
-  }
+  if (workOrder.status !== 'COMPLETED') throw new ApiError(400, 'Work order must be completed to generate invoice');
+  if (workOrder.invoice) throw new ApiError(409, 'Invoice already exists for this work order');
 
-  let subtotal = new Prisma.Decimal(0);
+  if (req.body.items.length === 0) throw new ApiError(422, 'At least one invoice item is required');
+
   const items = req.body.items.map((item: any) => {
-    const qty = new Prisma.Decimal(item.quantity);
-    const price = new Prisma.Decimal(item.unitPrice);
-    const amount = qty.mul(price);
-    subtotal = subtotal.add(amount);
+    const quantity = new Prisma.Decimal(item.quantity);
+    const unitPrice = new Prisma.Decimal(item.unitPrice);
     return {
-      description: item.description,
-      quantity: Number(qty),
-      unitPrice: price,
-      amount,
+    description: item.description,
+    quantity: quantity.toNumber(),
+    unitPrice,
+    amount: quantity.mul(unitPrice),
     };
   });
 
+  const subtotal = items.reduce((sum: Prisma.Decimal, item: any) => sum.add(item.amount), new Prisma.Decimal(0));
   const taxAmount = new Prisma.Decimal(req.body.taxAmount || 0);
   const discountAmount = new Prisma.Decimal(req.body.discountAmount || 0);
   const totalAmount = subtotal.add(taxAmount).sub(discountAmount);
+  if (totalAmount.lessThan(0)) throw new ApiError(422, 'Invoice total cannot be negative');
 
-  if (totalAmount.lessThan(0)) {
-    throw new ApiError(400, 'Total amount cannot be negative');
-  }
-
-  const dueAmount = totalAmount;
-  const invoiceNumber = `INV-${Date.now()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+  const invoiceNumber = `INV-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
 
   const invoice = await prisma.$transaction(async (tx) => {
     const created = await tx.invoice.create({
       data: {
-        workOrderId: workOrder.id,
-        invoiceNumber,
-        status: 'PENDING',
-        totalAmount,
-        taxAmount,
-        discountAmount,
-        dueAmount,
-        currency: 'BDT',
-        issuedAt: new Date(),
-        items: { create: items },
+      workOrderId: workOrder.id,
+      invoiceNumber,
+      status: 'PENDING',
+      totalAmount,
+      taxAmount,
+      discountAmount,
+      dueAmount: totalAmount,
+      currency: 'BDT',
+      items: { create: items },
       },
       include: { items: true, workOrder: true },
     });
-
-    // Advance service request state to INVOICED
     await tx.serviceRequest.update({
-      where: { id: workOrder.assignment.serviceRequestId },
+      where: { id: workOrder.assignment.serviceRequest.id },
       data: { status: 'INVOICED' },
     });
-
-    await createNotification(
-      {
-        userId: workOrder.assignment.serviceRequest.customerId,
-        type: 'INVOICE_GENERATED',
-        title: 'Invoice Generated',
-        message: `Invoice #${invoiceNumber} for BDT ${totalAmount.toFixed(2)} has been generated.`,
-        entityType: 'INVOICE',
-        entityId: created.id,
-      },
-      tx
-    );
-
-    await createAuditLog(
-      {
-        userId: req.user!.userId,
-        action: 'INVOICE_GENERATED',
-        entityType: 'INVOICE',
-        entityId: created.id,
-        newValues: { invoiceNumber, totalAmount: totalAmount.toString(), dueAmount: dueAmount.toString() },
-        ipAddress: getClientIp(req),
-        userAgent: req.headers['user-agent'] as string | undefined,
-      },
-      tx
-    );
-
     return created;
+  });
+
+  await createAuditLog({
+    userId: req.user!.userId,
+    action: 'INVOICE_GENERATED',
+    entityType: 'INVOICE',
+    entityId: invoice.id,
+    newValues: { invoiceNumber, totalAmount },
+    ipAddress: getClientIp(req),
+    userAgent: req.headers['user-agent'] as string | undefined,
   });
 
   sendCreated(res, invoice, 'Invoice generated successfully');

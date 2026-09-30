@@ -4,8 +4,7 @@ import prisma from '../../lib/prisma';
 import { ApiError } from '../../utils/ApiError';
 import { asyncHandler } from '../../utils/asyncHandler';
 import { sendSuccess } from '../../utils/response';
-import { authenticate } from '../../middlewares/authenticate';
-import type { RequestUser } from '../../middlewares/authenticate';
+import { authenticate, RequestUser } from '../../middlewares/authenticate';
 import { validateRequest } from '../../middlewares/validateRequest';
 import { z } from 'zod';
 import { createAuditLog, getClientIp } from '../../utils/auditLog';
@@ -47,7 +46,7 @@ export const updateMyProfile = [
     const profile = await prisma.technicianProfile.update({
       where: { userId: req.user!.userId },
       data: req.body,
-      include: { user: { select: { id: true, name: true, email: true, role: true, image: true, isActive: true, createdAt: true } }, skills: { include: { skill: true } } },
+      include: { user: true, skills: { include: { skill: true } } },
     });
 
     await createAuditLog({
@@ -70,7 +69,7 @@ export const updateMyAvailability = [
     const profile = await prisma.technicianProfile.update({
       where: { userId: req.user!.userId },
       data: { isAvailable: req.body.isAvailable },
-      include: { user: { select: { id: true, name: true, email: true, role: true, image: true, isActive: true, createdAt: true } } },
+      include: { user: true },
     });
 
     await createAuditLog({

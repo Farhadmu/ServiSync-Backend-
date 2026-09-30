@@ -1,15 +1,4 @@
-generator client {
-  provider = "prisma-client-js"
-}
-
-datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
-}
-
-// ──────────────────────────────────────────────────────────────────────
-// ENUMS
-// ──────────────────────────────────────────────────────────────────────
+// use prisma-next
 
 enum Role {
   CUSTOMER
@@ -115,12 +104,8 @@ enum AuditEntity {
   SCHEDULE
 }
 
-// ──────────────────────────────────────────────────────────────────────
-// USERS & PROFILES
-// ──────────────────────────────────────────────────────────────────────
-
 model User {
-  id              String    @id @default(cuid())
+  id              String    @id @default(cuid(2))
   email           String    @unique
   password        String?
   name            String
@@ -130,7 +115,7 @@ model User {
   isEmailVerified Boolean   @default(false)
   deletedAt       DateTime?
   createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  updatedAt       temporal.updatedAtString()
 
   customerProfile      CustomerProfile?
   technicianProfile    TechnicianProfile?
@@ -150,7 +135,7 @@ model User {
 }
 
 model CustomerProfile {
-  id                     String         @id @default(cuid())
+  id                     String         @id @default(cuid(2))
   userId                 String         @unique
   phone                  String?
   address                String?
@@ -158,22 +143,22 @@ model CustomerProfile {
   longitude              Float?
   preferredPaymentMethod PaymentMethod?
   createdAt              DateTime       @default(now())
-  updatedAt              DateTime       @updatedAt
+  updatedAt       temporal.updatedAtString()
 
   user User @relation(fields: [userId], references: [id])
 }
 
 model TechnicianProfile {
-  id              String   @id @default(cuid())
+  id              String   @id @default(cuid(2))
   userId          String   @unique
   bio             String?
   experienceYears Int?
-  hourlyRate      Decimal? @db.Decimal(12, 2)
+  hourlyRate      Numeric(12, 2)?
   baseLatitude    Float?
   baseLongitude   Float?
   isAvailable     Boolean  @default(true)
   createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  updatedAt       temporal.updatedAtString()
 
   user           User              @relation(fields: [userId], references: [id])
   skills         TechnicianSkill[]
@@ -183,7 +168,7 @@ model TechnicianProfile {
 }
 
 model RefreshToken {
-  id        String    @id @default(cuid())
+  id        String    @id @default(cuid(2))
   tokenHash String    @unique
   token     String?
   userId    String
@@ -199,23 +184,19 @@ model RefreshToken {
   @@index([expiresAt])
 }
 
-// ──────────────────────────────────────────────────────────────────────
-// SKILLS
-// ──────────────────────────────────────────────────────────────────────
-
 model Skill {
-  id          String   @id @default(cuid())
+  id          String   @id @default(cuid(2))
   name        String   @unique
   description String?
   createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  updatedAt   temporal.updatedAtString()
 
   technicians    TechnicianSkill[]
   serviceTypeReq ServiceTypeRequiredSkill[]
 }
 
 model TechnicianSkill {
-  id           String  @id @default(cuid())
+  id           String  @id @default(cuid(2))
   technicianId String
   skillId      String
   proficiency  String?
@@ -227,34 +208,30 @@ model TechnicianSkill {
   @@index([skillId])
 }
 
-// ──────────────────────────────────────────────────────────────────────
-// SERVICE CATALOG
-// ──────────────────────────────────────────────────────────────────────
-
 model ServiceCategory {
-  id          String    @id @default(cuid())
+  id          String    @id @default(cuid(2))
   name        String    @unique
   description String?
   icon        String?
   isActive    Boolean   @default(true)
   deletedAt   DateTime?
   createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  updatedAt   temporal.updatedAtString()
 
   serviceTypes ServiceType[]
 }
 
 model ServiceType {
-  id              String    @id @default(cuid())
+  id              String    @id @default(cuid(2))
   categoryId      String
   name            String
   description     String?
   durationMinutes Int?
-  basePrice       Decimal?  @db.Decimal(12, 2)
+  basePrice       Numeric(12, 2)?
   isActive        Boolean   @default(true)
   deletedAt       DateTime?
   createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  updatedAt       temporal.updatedAtString()
 
   category        ServiceCategory            @relation(fields: [categoryId], references: [id])
   requiredSkills  ServiceTypeRequiredSkill[]
@@ -266,7 +243,7 @@ model ServiceType {
 }
 
 model ServiceTypeRequiredSkill {
-  id            String @id @default(cuid())
+  id            String @id @default(cuid(2))
   serviceTypeId String
   skillId       String
 
@@ -277,12 +254,8 @@ model ServiceTypeRequiredSkill {
   @@index([skillId])
 }
 
-// ──────────────────────────────────────────────────────────────────────
-// SERVICE REQUESTS (customer)
-// ──────────────────────────────────────────────────────────────────────
-
 model ServiceRequest {
-  id                String               @id @default(cuid())
+  id                String               @id @default(cuid(2))
   customerId        String
   serviceTypeId     String
   title             String
@@ -297,7 +270,7 @@ model ServiceRequest {
   closedAt          DateTime?
   deletedAt         DateTime?
   createdAt         DateTime             @default(now())
-  updatedAt         DateTime             @updatedAt
+  updatedAt         temporal.updatedAtString()
 
   customer    User         @relation("CustomerServiceRequests", fields: [customerId], references: [id])
   serviceType ServiceType  @relation(fields: [serviceTypeId], references: [id])
@@ -312,19 +285,15 @@ model ServiceRequest {
   @@index([customerId, status])
 }
 
-// ──────────────────────────────────────────────────────────────────────
-// ASSIGNMENTS & WORK ORDERS
-// ──────────────────────────────────────────────────────────────────────
-
 model Assignment {
-  id               String           @id @default(cuid())
+  id               String           @id @default(cuid(2))
   serviceRequestId String
   technicianId     String
   managerId        String
   status           AssignmentStatus @default(PENDING)
   technicianNotes  String?
   createdAt        DateTime         @default(now())
-  updatedAt        DateTime         @updatedAt
+  updatedAt        temporal.updatedAtString()
   acceptedAt       DateTime?
   rejectedAt       DateTime?
   rejectedReason   String?
@@ -342,7 +311,7 @@ model Assignment {
 }
 
 model Schedule {
-  id           String    @id @default(cuid())
+  id           String    @id @default(cuid(2))
   assignmentId String    @unique
   technicianId String
   startAt      DateTime
@@ -350,7 +319,7 @@ model Schedule {
   cancelledAt  DateTime?
   cancelReason String?
   createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  updatedAt    temporal.updatedAtString()
 
   assignment Assignment        @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
   technician TechnicianProfile @relation(fields: [technicianId], references: [id])
@@ -361,15 +330,15 @@ model Schedule {
 }
 
 model WorkOrder {
-  id           String          @id @default(cuid())
+  id           String          @id @default(cuid(2))
   assignmentId String          @unique
   status       WorkOrderStatus @default(SCHEDULED)
   arrivedAt    DateTime?
   startedAt    DateTime?
   completedAt  DateTime?
-  actualCost   Decimal?        @db.Decimal(12, 2)
+  actualCost   Numeric(12, 2)?
   createdAt    DateTime        @default(now())
-  updatedAt    DateTime        @updatedAt
+  updatedAt    temporal.updatedAtString()
 
   assignment    Assignment     @relation(fields: [assignmentId], references: [id])
   serviceReport ServiceReport?
@@ -380,7 +349,7 @@ model WorkOrder {
 }
 
 model ServiceReport {
-  id           String   @id @default(cuid())
+  id           String   @id @default(cuid(2))
   workOrderId  String   @unique
   technicianId String
   summary      String?
@@ -389,7 +358,7 @@ model ServiceReport {
   beforeImages String[] @default([])
   afterImages  String[] @default([])
   createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  updatedAt    temporal.updatedAtString()
 
   workOrder  WorkOrder         @relation(fields: [workOrderId], references: [id])
   technician TechnicianProfile @relation(fields: [technicianId], references: [id])
@@ -397,12 +366,8 @@ model ServiceReport {
   @@index([technicianId])
 }
 
-// ──────────────────────────────────────────────────────────────────────
-// ATTACHMENTS (polymorphic — no Prisma back-relations; entityType+entityId)
-// ──────────────────────────────────────────────────────────────────────
-
 model Attachment {
-  id           String               @id @default(cuid())
+  id           String               @id @default(cuid(2))
   url          String
   publicId     String
   filename     String
@@ -423,25 +388,21 @@ model Attachment {
   @@index([createdAt])
 }
 
-// ──────────────────────────────────────────────────────────────────────
-// FINANCIALS
-// ──────────────────────────────────────────────────────────────────────
-
 model Invoice {
-  id             String         @id @default(cuid())
+  id             String         @id @default(cuid(2))
   workOrderId    String         @unique
   invoiceNumber  String         @unique
   status         InvoiceStatus  @default(DRAFT)
-  totalAmount    Decimal        @db.Decimal(12, 2)
-  taxAmount      Decimal        @default(0) @db.Decimal(12, 2)
-  discountAmount Decimal        @default(0) @db.Decimal(12, 2)
-  dueAmount      Decimal        @db.Decimal(12, 2)
+  totalAmount    Numeric(12, 2)
+  taxAmount      Numeric(12, 2) @default(0)
+  discountAmount Numeric(12, 2) @default(0)
+  dueAmount      Numeric(12, 2)
   currency       String         @default("BDT")
   paymentMethod  PaymentMethod?
   issuedAt       DateTime?
   paidAt         DateTime?
   createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
+  updatedAt      temporal.updatedAtString()
 
   workOrder WorkOrder     @relation(fields: [workOrderId], references: [id])
   items     InvoiceItem[]
@@ -451,12 +412,12 @@ model Invoice {
 }
 
 model InvoiceItem {
-  id          String   @id @default(cuid())
+  id          String   @id @default(cuid(2))
   invoiceId   String
   description String
   quantity    Float
-  unitPrice   Decimal  @db.Decimal(12, 2)
-  amount      Decimal  @db.Decimal(12, 2)
+  unitPrice   Numeric(12, 2)
+  amount      Numeric(12, 2)
   createdAt   DateTime @default(now())
 
   invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
@@ -465,14 +426,14 @@ model InvoiceItem {
 }
 
 model Payment {
-  id                String          @id @default(cuid())
+  id                String          @id @default(cuid(2))
   invoiceId         String
   customerId        String
   status            PaymentStatus   @default(PENDING)
   provider          PaymentProvider
   providerPaymentId String?
   providerSessionId String?
-  amount            Decimal         @db.Decimal(12, 2)
+  amount            Numeric(12, 2)
   currency          String          @default("BDT")
   method            PaymentMethod?
   cardLast4         String?
@@ -480,7 +441,7 @@ model Payment {
   userAgent         String?
   failureReason     String?
   createdAt         DateTime        @default(now())
-  updatedAt         DateTime        @updatedAt
+  updatedAt         temporal.updatedAtString()
   processedAt       DateTime?
 
   invoice  Invoice @relation(fields: [invoiceId], references: [id])
@@ -493,19 +454,15 @@ model Payment {
   @@index([provider, providerPaymentId])
 }
 
-// ──────────────────────────────────────────────────────────────────────
-// FEEDBACK
-// ──────────────────────────────────────────────────────────────────────
-
 model Feedback {
-  id           String   @id @default(cuid())
+  id           String   @id @default(cuid(2))
   workOrderId  String   @unique
   customerId   String
   technicianId String
   rating       Int
   comment      String?
   createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  updatedAt    temporal.updatedAtString()
 
   workOrder  WorkOrder @relation(fields: [workOrderId], references: [id])
   customer   User      @relation("FeedbackCustomer", fields: [customerId], references: [id])
@@ -516,12 +473,8 @@ model Feedback {
   @@index([rating])
 }
 
-// ──────────────────────────────────────────────────────────────────────
-// NOTIFICATIONS
-// ──────────────────────────────────────────────────────────────────────
-
 model Notification {
-  id         String           @id @default(cuid())
+  id         String           @id @default(cuid(2))
   userId     String
   type       NotificationType
   title      String
@@ -538,12 +491,8 @@ model Notification {
   @@index([createdAt])
 }
 
-// ──────────────────────────────────────────────────────────────────────
-// AUDIT LOG
-// ──────────────────────────────────────────────────────────────────────
-
 model AuditLog {
-  id         String      @id @default(cuid())
+  id         String      @id @default(cuid(2))
   userId     String?
   action     String
   entityType AuditEntity

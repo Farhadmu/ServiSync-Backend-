@@ -8,7 +8,6 @@ export type AuditAction =
   | 'USER_LOGGED_IN'
   | 'USER_LOGGED_OUT'
   | 'USER_UPDATED'
-  | 'USER_ACTIVATED'
   | 'USER_DEACTIVATED'
   | 'USER_ROLE_CHANGED'
   | 'SERVICE_REQUEST_CREATED'
@@ -21,7 +20,6 @@ export type AuditAction =
   | 'ASSIGNMENT_REASSIGNED'
   | 'WORK_ORDER_STATUS_UPDATED'
   | 'SERVICE_REPORT_SUBMITTED'
-  | 'SERVICE_REPORT_UPDATED'
   | 'INVOICE_GENERATED'
   | 'PAYMENT_INITIATED'
   | 'PAYMENT_SUCCESS'
@@ -32,22 +30,18 @@ export type AuditAction =
   | 'SERVICE_CATEGORY_UPDATED'
   | 'SERVICE_CATEGORY_DELETED';
 
-export async function createAuditLog(
-  params: {
-    userId?: string;
-    action: AuditAction;
-    entityType: string;
-    entityId?: string;
-    oldValues?: Prisma.InputJsonValue;
-    newValues?: Prisma.InputJsonValue;
-    ipAddress?: string;
-    userAgent?: string;
-  },
-  dbClient?: Prisma.TransactionClient | typeof prisma
-) {
-  const client = dbClient || prisma;
+export async function createAuditLog(params: {
+  userId?: string;
+  action: AuditAction;
+  entityType: string;
+  entityId?: string;
+  oldValues?: Prisma.InputJsonValue;
+  newValues?: Prisma.InputJsonValue;
+  ipAddress?: string;
+  userAgent?: string;
+}) {
   try {
-    await (client as typeof prisma).auditLog.create({
+    await prisma.auditLog.create({
       data: {
         userId: params.userId,
         action: params.action,
@@ -59,8 +53,8 @@ export async function createAuditLog(
         userAgent: params.userAgent,
       },
     });
-  } catch (error) {
-    console.error('Audit log failed:', error);
+  } catch {
+    // never fail the request due to audit log failure
   }
 }
 

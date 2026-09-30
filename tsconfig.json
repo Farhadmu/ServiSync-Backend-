@@ -1,8 +1,7 @@
 {
   "compilerOptions": {
-    "target": "ES2023",
-    "module": "ESNext",
-    "moduleResolution": "bundler",
+    "target": "ES2022",
+    "module": "preserve",
     "outDir": "./dist",
     "rootDir": ".",
     "strict": true,
@@ -11,14 +10,15 @@
     "skipLibCheck": true,
     "resolveJsonModule": true,
     "sourceMap": true,
-    "declaration": false,
-    "allowJs": false,
-    "verbatimModuleSyntax": false
+    "declaration": true,
+    "moduleResolution": "bundler",
+    "types": [
+      "node"
+    ]
   },
   "include": [
     "src/**/*",
-    "prisma/seed.ts",
-    "prisma.config.ts"
+    "prisma/seed.ts"
   ],
   "exclude": [
     "node_modules",

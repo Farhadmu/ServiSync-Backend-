@@ -5,8 +5,7 @@ import { registerSchema, loginSchema, refreshTokenSchema } from './auth.validati
 import { validateRequest } from '../../middlewares/validateRequest';
 import { asyncHandler } from '../../utils/asyncHandler';
 import { sendSuccess, sendCreated } from '../../utils/response';
-import { authenticate, authorize } from '../../middlewares/authenticate';
-import type { RequestUser } from '../../middlewares/authenticate';
+import { authenticate, authorize, RequestUser } from '../../middlewares/authenticate';
 
 export const register = [
   validateRequest({ body: registerSchema }),

@@ -20,18 +20,13 @@ import paymentRoutes from './modules/payments/payment.route';
 import feedbackRoutes from './modules/feedback/feedback.route';
 import notificationRoutes from './modules/notifications/notification.route';
 import adminRoutes from './modules/admin/admin.route';
-import attachmentRoutes from './modules/attachments/attachment.route';
+import serviceReportRoutes from './modules/serviceReports/serviceReport.route';
 
 const app: Express = express();
 
 app.use(helmet());
 app.use(configureCors(env));
-
-// Stripe webhook signature verification needs the raw, unparsed request body.
-// This MUST be registered before the global express.json() below, and only
-// for this exact path — every other route still gets normal JSON parsing.
-app.use('/api/v1/payments/webhook', express.raw({ type: 'application/json' }));
-
+app.use('/api/v1/payments/webhook', express.raw({ type: 'application/json', limit: '1mb' }));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(apiLimiter);
@@ -51,9 +46,9 @@ app.use('/api/v1/work-orders', workOrderRoutes);
 app.use('/api/v1/invoices', invoiceRoutes);
 app.use('/api/v1/payments', paymentRoutes);
 app.use('/api/v1/feedback', feedbackRoutes);
+app.use('/api/v1/service-reports', serviceReportRoutes);
 app.use('/api/v1/notifications', notificationRoutes);
 app.use('/api/v1/admin', adminRoutes);
-app.use('/api/v1/attachments', attachmentRoutes);
 
 app.use(notFound);
 app.use(errorHandler);

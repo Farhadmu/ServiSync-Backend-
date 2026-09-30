@@ -4,14 +4,14 @@ import prisma from '../../lib/prisma';
 import { ApiError } from '../../utils/ApiError';
 import { asyncHandler } from '../../utils/asyncHandler';
 import { sendSuccess, sendCreated } from '../../utils/response';
-import { authenticate, authorize } from '../../middlewares/authenticate';
-import type { RequestUser } from '../../middlewares/authenticate';
+import { authenticate, authorize, RequestUser } from '../../middlewares/authenticate';
 import { validateRequest } from '../../middlewares/validateRequest';
 import { z } from 'zod';
 import { createAuditLog, getClientIp } from '../../utils/auditLog';
-import { createNotification } from '../../utils/notification';
 import { SERVICE_REQUEST_STATUS_TRANSITIONS } from '../../constants';
 import { createServiceRequestSchema, reviewSchema } from './serviceRequest.validation';
+import { uploadToCloudinary } from '../../lib/cloudinary';
+import { hasAllowedFileSignature } from '../../middlewares/upload';
 
 const updateServiceRequestSchema = z.object({
   title: z.string().min(3).optional(),
@@ -60,25 +60,15 @@ export const createServiceRequest = [
       userAgent: req.headers['user-agent'] as string | undefined,
     });
 
-    // Notify customer
-    await createNotification({
-      userId: req.user!.userId,
-      type: 'STATUS_CHANGE',
-      title: 'Service Request Created',
-      message: `Your request "${request.title}" has been submitted successfully and is pending review.`,
-      entityType: 'SERVICE_REQUEST',
-      entityId: request.id,
-    });
-
     sendCreated(res, request, 'Service request created successfully');
   }),
 ];
 
 export const getServiceRequests = asyncHandler(async (req: any, res: Response) => {
   const { page = 1, limit = 10, status, categoryId, search, sortBy, sortOrder } = req.query;
-  const pageNum = Math.max(1, parseInt(page as string) || 1);
-  const limitNum = Math.min(100, Math.max(1, parseInt(limit as string) || 10));
-  const skip = (pageNum - 1) * limitNum;
+  const safePage = Math.max(1, Math.min(100000, parseInt(page as string) || 1));
+  const safeLimit = Math.min(100, Math.max(1, parseInt(limit as string) || 10));
+  const skip = (safePage - 1) * safeLimit;
 
   const where: Prisma.ServiceRequestWhereInput = {
     deletedAt: null,
@@ -93,16 +83,19 @@ export const getServiceRequests = asyncHandler(async (req: any, res: Response) =
     } : {}),
   };
 
-  const allowedSort = ['createdAt', 'updatedAt', 'status', 'title', 'preferredDateTime'];
-  const sortField = allowedSort.includes(sortBy as string) ? (sortBy as string) : 'createdAt';
-  const sortDirection = sortOrder === 'asc' ? 'asc' : 'desc';
-  const orderBy: any = { [sortField]: sortDirection };
+  const sortableFields = new Set(['createdAt', 'updatedAt', 'preferredDateTime', 'status', 'title']);
+  const orderBy: any = {};
+  if (sortBy && sortableFields.has(sortBy as string)) {
+    orderBy[sortBy as string] = sortOrder === 'asc' ? 'asc' : 'desc';
+  } else {
+    orderBy.createdAt = 'desc';
+  }
 
   const [requests, total] = await Promise.all([
     prisma.serviceRequest.findMany({
       where,
       skip,
-      take: limitNum,
+      take: safeLimit,
       orderBy,
       include: {
         customer: { select: { id: true, name: true, email: true } },
@@ -114,16 +107,20 @@ export const getServiceRequests = asyncHandler(async (req: any, res: Response) =
   ]);
 
   sendSuccess(res, requests, 'Service requests fetched successfully', {
-    page: pageNum,
-    limit: limitNum,
+    page: safePage,
+    limit: safeLimit,
     total,
-    totalPages: Math.ceil(total / limitNum),
+    totalPages: Math.ceil(total / parseInt(limit as string)),
   });
 });
 
 export const getServiceRequestById = asyncHandler(async (req: any, res: Response) => {
   const request = await prisma.serviceRequest.findFirst({
-    where: { id: req.params.id, deletedAt: null },
+    where: {
+      id: req.params.id,
+      deletedAt: null,
+      ...(req.user!.role === 'CUSTOMER' ? { customerId: req.user!.userId } : {}),
+    },
     include: {
       customer: { select: { id: true, name: true, email: true } },
       serviceType: { include: { category: true } },
@@ -132,19 +129,6 @@ export const getServiceRequestById = asyncHandler(async (req: any, res: Response
   });
 
   if (!request) throw new ApiError(404, 'Service request not found');
-
-  if (req.user!.role === 'CUSTOMER' && request.customerId !== req.user!.userId) {
-    throw new ApiError(403, 'Forbidden: You do not own this service request');
-  }
-
-  if (req.user!.role === 'TECHNICIAN') {
-    const techProfile = await prisma.technicianProfile.findFirst({
-      where: { userId: req.user!.userId },
-    });
-    if (!techProfile || !request.assignments.some((a) => a.technicianId === techProfile.id)) {
-      throw new ApiError(403, 'Forbidden: You are not assigned to this service request');
-    }
-  }
 
   sendSuccess(res, request, 'Service request fetched successfully');
 });
@@ -215,7 +199,7 @@ export const reviewServiceRequest = asyncHandler(async (req: any, res: Response)
       adminNotes: req.body.adminNotes,
       rejectionReason: req.body.rejectionReason,
     },
-    include: { customer: { select: { id: true, name: true, email: true, role: true, image: true, isActive: true, createdAt: true } }, serviceType: { include: { category: true } } },
+    include: { customer: true, serviceType: { include: { category: true } } },
   });
 
   await createAuditLog({
@@ -229,15 +213,6 @@ export const reviewServiceRequest = asyncHandler(async (req: any, res: Response)
     userAgent: req.headers['user-agent'] as string | undefined,
   });
 
-  await createNotification({
-    userId: serviceRequest.customerId,
-    type: 'STATUS_CHANGE',
-    title: `Service Request ${newStatus}`,
-    message: `Your service request #${updated.id.slice(-6)} has been ${newStatus.toLowerCase()}. ${req.body.adminNotes || req.body.rejectionReason || ''}`.trim(),
-    entityType: 'SERVICE_REQUEST',
-    entityId: updated.id,
-  });
-
   sendSuccess(res, updated, `Service request ${newStatus.toLowerCase()} successfully`);
 });
 
@@ -248,7 +223,7 @@ export const cancelServiceRequest = asyncHandler(async (req: any, res: Response)
   });
 
   if (!serviceRequest) throw new ApiError(404, 'Service request not found');
-  if (!['PENDING', 'UNDER_REVIEW', 'APPROVED'].includes(serviceRequest.status)) {
+  if (!['PENDING', 'UNDER_REVIEW'].includes(serviceRequest.status)) {
     throw new ApiError(400, 'Cannot cancel request in current status');
   }
   if (serviceRequest.assignments.length > 0) {
@@ -272,4 +247,30 @@ export const cancelServiceRequest = asyncHandler(async (req: any, res: Response)
   });
 
   sendSuccess(res, updated, 'Service request cancelled successfully');
+});
+
+export const uploadServiceRequestAttachment = asyncHandler(async (req: any, res: Response) => {
+  if (!req.file) throw new ApiError(422, 'File is required');
+  const request = await prisma.serviceRequest.findFirst({
+    where: { id: req.params.id, customerId: req.user!.userId, deletedAt: null },
+  });
+  if (!request) throw new ApiError(404, 'Service request not found');
+  if (!hasAllowedFileSignature(req.file.buffer, req.file.mimetype)) throw new ApiError(422, 'File content does not match its declared type');
+
+  const uploaded: any = await uploadToCloudinary(req.file.buffer, req.file.originalname, 'service-requests');
+  const attachment = await prisma.attachment.create({
+    data: {
+      url: uploaded.secure_url || uploaded.url,
+      publicId: uploaded.public_id,
+      filename: req.file.originalname,
+      mimeType: req.file.mimetype,
+      size: req.file.size,
+      width: uploaded.width,
+      height: uploaded.height,
+      entityType: 'SERVICE_REQUEST',
+      entityId: request.id,
+      uploadedById: req.user!.userId,
+    },
+  });
+  sendCreated(res, attachment, 'Attachment uploaded successfully');
 });
