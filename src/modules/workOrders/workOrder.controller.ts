@@ -21,8 +21,17 @@ export const getWorkOrders = asyncHandler(async (req: any, res: Response) => {
 
   const where: Prisma.WorkOrderWhereInput = {};
   if (req.user!.role === 'TECHNICIAN') {
-    const techProfile = await prisma.technicianProfile.findFirst({ where: { userId: req.user!.userId } });
-    if (!techProfile) throw new ApiError(404, 'Technician profile not found');
+    let techProfile = await prisma.technicianProfile.findFirst({ where: { userId: req.user!.userId } });
+    if (!techProfile) {
+      techProfile = await prisma.technicianProfile.create({
+        data: {
+          userId: req.user!.userId,
+          isAvailable: true,
+          hourlyRate: 50,
+          experienceYears: 1,
+        },
+      });
+    }
     where.assignment = { technicianId: techProfile.id };
   } else if (req.user!.role === 'CUSTOMER') {
     where.assignment = { serviceRequest: { customerId: req.user!.userId } };

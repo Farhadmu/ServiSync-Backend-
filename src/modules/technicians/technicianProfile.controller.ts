@@ -28,7 +28,7 @@ const updateSkillsSchema = z.object({
 });
 
 export const getMyProfile = asyncHandler(async (req: any, res: Response) => {
-  const profile = await prisma.technicianProfile.findFirst({
+  let profile = await prisma.technicianProfile.findFirst({
     where: { userId: req.user!.userId },
     include: {
       user: { select: { id: true, name: true, email: true, image: true } },
@@ -36,18 +36,45 @@ export const getMyProfile = asyncHandler(async (req: any, res: Response) => {
     },
   });
 
-  if (!profile) throw new ApiError(404, 'Technician profile not found');
+  if (!profile) {
+    profile = await prisma.technicianProfile.create({
+      data: {
+        userId: req.user!.userId,
+        isAvailable: true,
+        hourlyRate: 50,
+        experienceYears: 1,
+      },
+      include: {
+        user: { select: { id: true, name: true, email: true, image: true } },
+        skills: { include: { skill: true } },
+      },
+    });
+  }
   sendSuccess(res, profile, 'Technician profile fetched successfully');
 });
 
 export const updateMyProfile = [
   validateRequest({ body: updateProfileSchema }),
   asyncHandler(async (req: any, res: Response) => {
-    const profile = await prisma.technicianProfile.update({
+    let profile = await prisma.technicianProfile.findFirst({
       where: { userId: req.user!.userId },
-      data: req.body,
-      include: { user: true, skills: { include: { skill: true } } },
     });
+
+    if (!profile) {
+      profile = await prisma.technicianProfile.create({
+        data: {
+          userId: req.user!.userId,
+          ...req.body,
+        },
+        include: { user: true, skills: { include: { skill: true } } },
+      });
+    } else {
+      profile = await prisma.technicianProfile.update({
+        where: { userId: req.user!.userId },
+        data: req.body,
+        include: { user: true, skills: { include: { skill: true } } },
+      });
+    }
 
     await createAuditLog({
       userId: req.user!.userId,
@@ -66,11 +93,25 @@ export const updateMyProfile = [
 export const updateMyAvailability = [
   validateRequest({ body: updateAvailabilitySchema }),
   asyncHandler(async (req: any, res: Response) => {
-    const profile = await prisma.technicianProfile.update({
+    let profile = await prisma.technicianProfile.findFirst({
       where: { userId: req.user!.userId },
-      data: { isAvailable: req.body.isAvailable },
-      include: { user: true },
     });
+
+    if (!profile) {
+      profile = await prisma.technicianProfile.create({
+        data: {
+          userId: req.user!.userId,
+          isAvailable: req.body.isAvailable,
+        },
+        include: { user: true },
+      });
+    } else {
+      profile = await prisma.technicianProfile.update({
+        where: { userId: req.user!.userId },
+        data: { isAvailable: req.body.isAvailable },
+        include: { user: true },
+      });
+    }
 
     await createAuditLog({
       userId: req.user!.userId,
@@ -89,11 +130,20 @@ export const updateMyAvailability = [
 export const updateMySkills = [
   validateRequest({ body: updateSkillsSchema }),
   asyncHandler(async (req: any, res: Response) => {
-    const technicianProfile = await prisma.technicianProfile.findFirst({
+    let technicianProfile = await prisma.technicianProfile.findFirst({
       where: { userId: req.user!.userId },
     });
 
-    if (!technicianProfile) throw new ApiError(404, 'Technician profile not found');
+    if (!technicianProfile) {
+      technicianProfile = await prisma.technicianProfile.create({
+        data: {
+          userId: req.user!.userId,
+          isAvailable: true,
+          hourlyRate: 50,
+          experienceYears: 1,
+        },
+      });
+    }
 
     const newSkills = req.body.newSkills || [];
     const existingSkills = req.body.skills || [];
@@ -131,11 +181,20 @@ export const updateMySkills = [
 ];
 
 export const getMyJobs = asyncHandler(async (req: any, res: Response) => {
-  const technicianProfile = await prisma.technicianProfile.findFirst({
+  let technicianProfile = await prisma.technicianProfile.findFirst({
     where: { userId: req.user!.userId },
   });
 
-  if (!technicianProfile) throw new ApiError(404, 'Technician profile not found');
+  if (!technicianProfile) {
+    technicianProfile = await prisma.technicianProfile.create({
+      data: {
+        userId: req.user!.userId,
+        isAvailable: true,
+        hourlyRate: 50,
+        experienceYears: 1,
+      },
+    });
+  }
 
   const assignments = await prisma.assignment.findMany({
     where: { technicianId: technicianProfile.id, status: { not: 'CANCELLED' } },
@@ -150,11 +209,20 @@ export const getMyJobs = asyncHandler(async (req: any, res: Response) => {
 });
 
 export const getMySchedule = asyncHandler(async (req: any, res: Response) => {
-  const technicianProfile = await prisma.technicianProfile.findFirst({
+  let technicianProfile = await prisma.technicianProfile.findFirst({
     where: { userId: req.user!.userId },
   });
 
-  if (!technicianProfile) throw new ApiError(404, 'Technician profile not found');
+  if (!technicianProfile) {
+    technicianProfile = await prisma.technicianProfile.create({
+      data: {
+        userId: req.user!.userId,
+        isAvailable: true,
+        hourlyRate: 50,
+        experienceYears: 1,
+      },
+    });
+  }
 
   const assignments = await prisma.assignment.findMany({
     where: { technicianId: technicianProfile.id, status: { in: ['SCHEDULED', 'ACCEPTED'] } },
