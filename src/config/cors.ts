@@ -8,7 +8,14 @@ export function configureCors(env: any) {
 
   return (req: Request, res: Response, next: NextFunction) => {
     const origin = req.headers.origin;
-    if (origin && origins.includes(origin)) {
+    const isAllowed =
+      !origin ||
+      origins.includes('*') ||
+      origins.includes(origin) ||
+      origin.endsWith('.vercel.app') ||
+      origin.includes('localhost');
+
+    if (origin && isAllowed) {
       res.setHeader('Access-Control-Allow-Origin', origin);
       res.setHeader('Access-Control-Allow-Credentials', 'true');
     }
