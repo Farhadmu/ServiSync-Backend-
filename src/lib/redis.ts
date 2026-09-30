@@ -1,24 +1,28 @@
 import Redis from 'ioredis';
 import { env } from '../config/env';
 
-const redisUrl = env.REDIS_URL && env.REDIS_URL.trim() !== '' ? env.REDIS_URL : 'redis://localhost:6379';
+const configuredUrl = (env.REDIS_URL || '').trim();
+const hasValidRedis = configuredUrl.startsWith('redis://') || configuredUrl.startsWith('rediss://');
+const redisUrl = hasValidRedis ? configuredUrl : 'redis://localhost:6379';
 
 const redis = new Redis(redisUrl, {
   maxRetriesPerRequest: 1,
   enableReadyCheck: false,
   lazyConnect: true,
   retryStrategy: (times) => {
-    if (times > 3) return null;
-    return Math.min(times * 100, 2000);
+    if (times > 2) return null;
+    return Math.min(times * 100, 1000);
   },
 });
 
-redis.connect().catch((err) => {
-  // Gracefully handle redis unavailability
-});
+if (hasValidRedis || env.NODE_ENV === 'development') {
+  redis.connect().catch(() => {
+    // Gracefully handle redis unavailability
+  });
+}
 
 redis.on('connect', () => console.log('Redis connected'));
-redis.on('error', (err) => {
+redis.on('error', () => {
   // Silent fallback so Redis unavailability does not crash HTTP server
 });
 
