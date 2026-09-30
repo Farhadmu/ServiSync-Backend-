@@ -20,8 +20,8 @@ const updateCategorySchema = z.object({
 });
 
 router.post('/', authenticate, authorize('ADMIN', 'MANAGER'), validateRequest({ body: createCategorySchema }), createCategory);
-router.get('/', authenticate, getCategories);
-router.get('/:id', authenticate, getCategoryById);
+router.get('/', getCategories);
+router.get('/:id', getCategoryById);
 router.patch('/:id', authenticate, authorize('ADMIN', 'MANAGER'), validateRequest({ body: updateCategorySchema }), updateCategory);
 router.delete('/:id', authenticate, authorize('ADMIN', 'MANAGER'), deleteCategory);
 
