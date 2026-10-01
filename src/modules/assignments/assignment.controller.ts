@@ -11,6 +11,7 @@ import { z } from 'zod';
 import { createAuditLog, getClientIp } from '../../utils/auditLog';
 import { ASSIGNMENT_STATUS_TRANSITIONS } from '../../constants';
 import { createNotification } from '../../utils/notification';
+import { getTechnicianRecommendations } from './recommendation.service';
 
 const assignSchema = z.object({
   serviceRequestId: z.string().min(1, 'Service request ID is required'),
@@ -18,6 +19,7 @@ const assignSchema = z.object({
   scheduledStartAt: z.string().datetime().optional(),
   scheduledEndAt: z.string().datetime().optional(),
   technicianNotes: z.string().optional(),
+  overrideReason: z.string().optional(),
 });
 
 const respondSchema = z.object({
@@ -105,10 +107,38 @@ export const assignTechnician = [
         action: 'ASSIGNMENT_CREATED',
         entityType: 'ASSIGNMENT',
         entityId: created.id,
-        newValues: created,
+        newValues: {
+          ...created,
+          overrideReason: req.body.overrideReason || null,
+        },
         ipAddress: getClientIp(req),
         userAgent: req.headers['user-agent'] as string | undefined,
       });
+
+      // Automated workflow notifications
+      try {
+        // 1. Notify Technician
+        await createNotification({
+          userId: technician.userId,
+          type: 'STATUS_CHANGE',
+          title: 'New Service Dispatch',
+          message: `You have been assigned to service request: "${serviceRequest.title}".`,
+          entityType: 'ASSIGNMENT',
+          entityId: created.id,
+        });
+
+        // 2. Notify Customer
+        await createNotification({
+          userId: serviceRequest.customerId,
+          type: 'STATUS_CHANGE',
+          title: 'Technician Assigned',
+          message: `Certified technician ${created.technician?.user?.name || 'assigned'} has been dispatched to your service request.`,
+          entityType: 'ASSIGNMENT',
+          entityId: created.id,
+        });
+      } catch (notifErr) {
+        console.warn('Failed to send assignment notification non-fatally:', notifErr);
+      }
 
       return created;
     });
@@ -262,3 +292,17 @@ export const rescheduleAssignment = asyncHandler(async (req: any, res: Response)
 
   sendSuccess(res, updated, 'Assignment rescheduled successfully');
 });
+
+export const getRecommendations = asyncHandler(async (req: any, res: Response) => {
+  const serviceRequestId = req.query.serviceRequestId as string;
+  if (!serviceRequestId) {
+    throw new ApiError(400, 'serviceRequestId query parameter is required');
+  }
+
+  const scheduledStartAt = req.query.scheduledStartAt as string | undefined;
+  const scheduledEndAt = req.query.scheduledEndAt as string | undefined;
+
+  const result = await getTechnicianRecommendations(serviceRequestId, scheduledStartAt, scheduledEndAt);
+  sendSuccess(res, result, 'Technician recommendations generated successfully');
+});
+

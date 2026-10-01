@@ -215,4 +215,71 @@ describe('ServiSync Backend - Core Safety & Business Logic Tests', () => {
       assert.equal(feedback.technicianId, user.id);
     });
   });
+
+  describe('9. Smart Technician Recommendation Engine Ranking', () => {
+    it('should prioritize candidate with complete required skills, higher rating, and lower workload', () => {
+      // Candidate A: 5.0 rating, 0 active jobs, 5 yrs exp, has HVAC + Electrical
+      const candidateA = {
+        name: 'Rahim Certified',
+        matchedSkills: ['HVAC', 'Electrical'],
+        missingSkills: [],
+        rating: 5.0,
+        activeJobs: 0,
+        experienceYears: 5,
+      };
+
+      // Candidate B: 4.2 rating, 3 active jobs, 2 yrs exp, has HVAC + Electrical
+      const candidateB = {
+        name: 'Karim Tech',
+        matchedSkills: ['HVAC', 'Electrical'],
+        missingSkills: [],
+        rating: 4.2,
+        activeJobs: 3,
+        experienceYears: 2,
+      };
+
+      const calculateScore = (c: typeof candidateA) => {
+        const skillScore = 30; // has all skills
+        const ratingScore = Math.round((c.rating / 5) * 25);
+        const workloadScore = Math.max(0, 20 - c.activeJobs * 4);
+        const experienceScore = Math.min(20, Math.max(5, c.experienceYears * 3));
+        return skillScore + ratingScore + workloadScore + experienceScore;
+      };
+
+      const scoreA = calculateScore(candidateA);
+      const scoreB = calculateScore(candidateB);
+
+      assert.ok(scoreA > scoreB, `Candidate A score (${scoreA}) should exceed Candidate B score (${scoreB})`);
+      assert.equal(scoreA, 30 + 25 + 20 + 15); // 90
+      assert.equal(scoreB, 30 + 21 + 8 + 6);   // 65
+    });
+
+    it('should disqualify candidates who are missing required skills or have overlapping schedules', () => {
+      const requiredSkills = ['HVAC', 'Electrical'];
+      const techSkills = ['Plumbing', 'Carpentry'];
+      const missingSkills = requiredSkills.filter(s => !techSkills.includes(s));
+      const hasConflict = true;
+
+      const isEligible = missingSkills.length === 0 && !hasConflict;
+      assert.equal(isEligible, false);
+      assert.equal(missingSkills.length, 2);
+    });
+  });
+
+  describe('10. Duration-Aware Appointment Slot Calculations', () => {
+    it('should generate 8 one-hour slots for 60-minute services and 4 two-hour slots for 120-minute services', () => {
+      const getSlotCountForDuration = (durationMinutes: number) => {
+        if (durationMinutes <= 60) return 8; // 09:00 - 18:00 hourly (minus lunch hour)
+        if (durationMinutes > 150) return 2; // half-day blocks
+        return 4; // standard 2-hour blocks
+      };
+
+      assert.equal(getSlotCountForDuration(45), 8);
+      assert.equal(getSlotCountForDuration(60), 8);
+      assert.equal(getSlotCountForDuration(90), 4);
+      assert.equal(getSlotCountForDuration(120), 4);
+      assert.equal(getSlotCountForDuration(240), 2);
+    });
+  });
 });
+

@@ -12,6 +12,7 @@ import { SERVICE_REQUEST_STATUS_TRANSITIONS } from '../../constants';
 import { createServiceRequestSchema, reviewSchema } from './serviceRequest.validation';
 import { uploadToCloudinary } from '../../lib/cloudinary';
 import { hasAllowedFileSignature } from '../../middlewares/upload';
+import { createNotification } from '../../utils/notification';
 
 const updateServiceRequestSchema = z.object({
   title: z.string().min(3).optional(),
@@ -35,6 +36,37 @@ export const createServiceRequest = [
       where: { id: targetCategoryId, deletedAt: null, isActive: true },
     });
     if (!category) throw new ApiError(404, 'Service category not found');
+
+    if (req.body.preferredDateTime) {
+      const preferred = new Date(req.body.preferredDateTime);
+      if (isNaN(preferred.getTime()) || preferred <= new Date()) {
+        throw new ApiError(400, 'Appointment slot cannot be in the past');
+      }
+
+      // Revalidate slot capacity
+      const duration = (serviceType.durationMinutes || 120) * 60 * 1000;
+      const windowEnd = new Date(preferred.getTime() + duration);
+
+      const activeBookingsCount = await prisma.schedule.count({
+        where: {
+          cancelledAt: null,
+          startAt: { lt: windowEnd },
+          endAt: { gt: preferred },
+        },
+      });
+
+      const totalTechs = await prisma.technicianProfile.count({
+        where: {
+          isAvailable: true,
+          user: { deletedAt: null, isActive: true },
+        },
+      });
+
+      const maxCapacity = Math.max(3, totalTechs);
+      if (activeBookingsCount >= maxCapacity) {
+        throw new ApiError(409, 'The selected appointment slot has just been filled. Please choose another time.');
+      }
+    }
 
     const request = await prisma.serviceRequest.create({
       data: {
@@ -60,6 +92,27 @@ export const createServiceRequest = [
       ipAddress: getClientIp(req),
       userAgent: req.headers['user-agent'] as string | undefined,
     });
+
+    // Automated workflow notification to Operations Managers
+    try {
+      const managers = await prisma.user.findMany({
+        where: { role: { in: ['MANAGER', 'ADMIN'] }, isActive: true, deletedAt: null },
+        select: { id: true },
+        take: 5,
+      });
+      for (const mgr of managers) {
+        await createNotification({
+          userId: mgr.id,
+          type: 'STATUS_CHANGE',
+          title: 'New Service Request',
+          message: `New request "${request.title}" awaiting dispatch review.`,
+          entityType: 'SERVICE_REQUEST',
+          entityId: request.id,
+        });
+      }
+    } catch (notifErr) {
+      console.warn('Failed to dispatch manager notification non-fatally:', notifErr);
+    }
 
     sendCreated(res, request, 'Service request created successfully');
   }),
@@ -306,13 +359,42 @@ export const getAvailableSlots = asyncHandler(async (req: any, res: Response) =>
 
   const capacityPerSlot = Math.max(2, totalAvailableTechs);
 
-  // Standard business slots
-  const slotDefinitions = [
+  let durationMinutes = 120;
+  if (serviceTypeId) {
+    const st = await prisma.serviceType.findUnique({
+      where: { id: serviceTypeId as string },
+      select: { durationMinutes: true },
+    });
+    if (st?.durationMinutes) {
+      durationMinutes = st.durationMinutes;
+    }
+  }
+
+  // Duration-aware standard business slots
+  let slotDefinitions = [
     { id: 'slot-1', label: '09:00 AM - 11:00 AM', startHour: 9, endHour: 11 },
     { id: 'slot-2', label: '11:00 AM - 01:00 PM', startHour: 11, endHour: 13 },
     { id: 'slot-3', label: '02:00 PM - 04:00 PM', startHour: 14, endHour: 16 },
     { id: 'slot-4', label: '04:00 PM - 06:00 PM', startHour: 16, endHour: 18 },
   ];
+
+  if (durationMinutes <= 60) {
+    slotDefinitions = [
+      { id: 'slot-1', label: '09:00 AM - 10:00 AM', startHour: 9, endHour: 10 },
+      { id: 'slot-2', label: '10:00 AM - 11:00 AM', startHour: 10, endHour: 11 },
+      { id: 'slot-3', label: '11:00 AM - 12:00 PM', startHour: 11, endHour: 12 },
+      { id: 'slot-4', label: '01:00 PM - 02:00 PM', startHour: 13, endHour: 14 },
+      { id: 'slot-5', label: '02:00 PM - 03:00 PM', startHour: 14, endHour: 15 },
+      { id: 'slot-6', label: '03:00 PM - 04:00 PM', startHour: 15, endHour: 16 },
+      { id: 'slot-7', label: '04:00 PM - 05:00 PM', startHour: 16, endHour: 17 },
+      { id: 'slot-8', label: '05:00 PM - 06:00 PM', startHour: 17, endHour: 18 },
+    ];
+  } else if (durationMinutes > 150) {
+    slotDefinitions = [
+      { id: 'slot-1', label: '09:00 AM - 01:00 PM (Morning Half-Day)', startHour: 9, endHour: 13 },
+      { id: 'slot-2', label: '02:00 PM - 06:00 PM (Afternoon Half-Day)', startHour: 14, endHour: 18 },
+    ];
+  }
 
   const now = new Date();
 

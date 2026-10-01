@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { assignTechnician, respondToAssignment, rescheduleAssignment } from './assignment.controller';
+import { assignTechnician, respondToAssignment, rescheduleAssignment, getRecommendations } from './assignment.controller';
 import { authenticate, authorize } from '../../middlewares/authenticate';
 import { validateRequest } from '../../middlewares/validateRequest';
 import { z } from 'zod';
@@ -12,6 +12,7 @@ const assignSchema = z.object({
   scheduledStartAt: z.string().datetime().optional(),
   scheduledEndAt: z.string().datetime().optional(),
   technicianNotes: z.string().optional(),
+  overrideReason: z.string().optional(),
 });
 
 const respondSchema = z.object({
@@ -24,6 +25,7 @@ const rescheduleSchema = z.object({
   scheduledEndAt: z.string().datetime(),
 });
 
+router.get('/recommendations', authenticate, authorize('MANAGER', 'ADMIN'), getRecommendations);
 router.post('/', authenticate, authorize('MANAGER', 'ADMIN'), validateRequest({ body: assignSchema }), assignTechnician);
 router.patch('/:id/respond', authenticate, authorize('TECHNICIAN'), validateRequest({ body: respondSchema }), respondToAssignment);
 router.patch('/:id/reschedule', authenticate, authorize('MANAGER', 'ADMIN'), validateRequest({ body: rescheduleSchema }), rescheduleAssignment);

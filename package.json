@@ -14,7 +14,7 @@
     "prisma:studio": "prisma studio",
     "prisma:push": "prisma db push",
     "prisma:seed": "ts-node prisma/seed.ts",
-    "test": "echo \"add test framework in Phase 8\"",
+    "test": "tsx --test src/tests/**/*.test.ts",
     "contract:emit": "prisma contract emit"
   },
   "keywords": [
