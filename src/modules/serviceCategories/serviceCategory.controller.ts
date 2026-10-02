@@ -55,6 +55,12 @@ export const getCategories = asyncHandler(async (req: any, res: Response) => {
   const [categories, total] = await Promise.all([
     prisma.serviceCategory.findMany({
       where,
+      include: {
+        serviceTypes: {
+          where: { deletedAt: null, isActive: true },
+          orderBy: { name: 'asc' },
+        },
+      },
       skip,
       take: parseInt(limit as string),
       orderBy: { name: 'asc' },
@@ -68,6 +74,41 @@ export const getCategories = asyncHandler(async (req: any, res: Response) => {
     total,
     totalPages: Math.ceil(total / parseInt(limit as string)),
   });
+});
+
+export const createServiceType = asyncHandler(async (req: any, res: Response) => {
+  const category = await prisma.serviceCategory.findFirst({
+    where: { id: req.params.id, deletedAt: null },
+  });
+  if (!category) throw new ApiError(404, 'Service category not found');
+
+  const name = (req.body.name || '').trim();
+  if (!name || name.length < 2) {
+    throw new ApiError(400, 'Service type name must be at least 2 characters');
+  }
+
+  const serviceType = await prisma.serviceType.create({
+    data: {
+      categoryId: category.id,
+      name,
+      description: req.body.description || null,
+      durationMinutes: req.body.durationMinutes ? parseInt(req.body.durationMinutes) : 60,
+      basePrice: req.body.basePrice ? parseFloat(req.body.basePrice) : 500,
+      isActive: true,
+    },
+  });
+
+  await createAuditLog({
+    userId: req.user!.userId,
+    action: 'SERVICE_TYPE_CREATED',
+    entityType: 'SERVICE_TYPE',
+    entityId: serviceType.id,
+    newValues: serviceType,
+    ipAddress: getClientIp(req),
+    userAgent: req.headers['user-agent'] as string | undefined,
+  });
+
+  sendCreated(res, serviceType, 'Service type added successfully');
 });
 
 export const getCategoryById = asyncHandler(async (req: any, res: Response) => {

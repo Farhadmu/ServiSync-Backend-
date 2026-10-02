@@ -2,14 +2,21 @@ import { z } from 'zod';
 
 export const createServiceRequestSchema = z.object({
   categoryId: z.string().optional(),
-  serviceTypeId: z.string().min(1, 'Service type is required'),
+  serviceTypeId: z.string().optional(),
+  customServiceTypeName: z.string().optional(),
   title: z.string().min(3, 'Title must be at least 3 characters'),
   description: z.string().optional(),
   location: z.string().optional(),
   latitude: z.coerce.number().optional(),
   longitude: z.coerce.number().optional(),
   preferredDateTime: z.string().optional(),
-});
+}).refine(
+  (data) => !!data.serviceTypeId || !!data.customServiceTypeName || !!data.title,
+  {
+    message: 'Either serviceTypeId or a specific service type must be provided',
+    path: ['serviceTypeId'],
+  }
+);
 
 export const updateServiceRequestSchema = z.object({
   title: z.string().min(3).optional(),

@@ -26,16 +26,74 @@ const updateServiceRequestSchema = z.object({
 export const createServiceRequest = [
   validateRequest({ body: createServiceRequestSchema }),
   asyncHandler(async (req: any, res: Response) => {
-    const serviceType = await prisma.serviceType.findFirst({
-      where: { id: req.body.serviceTypeId, deletedAt: null, isActive: true },
-    });
-    if (!serviceType) throw new ApiError(404, 'Service type not found');
+    let serviceType = null;
+    if (req.body.serviceTypeId) {
+      serviceType = await prisma.serviceType.findFirst({
+        where: { id: req.body.serviceTypeId, deletedAt: null, isActive: true },
+      });
+    }
 
-    const targetCategoryId = req.body.categoryId || serviceType.categoryId;
-    const category = await prisma.serviceCategory.findFirst({
-      where: { id: targetCategoryId, deletedAt: null, isActive: true },
-    });
-    if (!category) throw new ApiError(404, 'Service category not found');
+    const targetCategoryId = req.body.categoryId || serviceType?.categoryId;
+    let category = null;
+    if (targetCategoryId) {
+      category = await prisma.serviceCategory.findFirst({
+        where: { id: targetCategoryId, deletedAt: null, isActive: true },
+      });
+    }
+
+    // If serviceType was not found by ID or ID was not provided, but we have a custom name or title
+    if (!serviceType) {
+      const typeName = (req.body.customServiceTypeName || req.body.title || 'General Service').trim();
+
+      // If category is provided, look for or create service type under category
+      if (category) {
+        serviceType = await prisma.serviceType.findFirst({
+          where: {
+            categoryId: category.id,
+            name: { equals: typeName, mode: 'insensitive' },
+            deletedAt: null,
+          },
+        });
+
+        if (!serviceType) {
+          serviceType = await prisma.serviceType.create({
+            data: {
+              categoryId: category.id,
+              name: typeName,
+              description: `Custom service: ${typeName}`,
+              basePrice: 500,
+              durationMinutes: 60,
+              isActive: true,
+            },
+          });
+        }
+      } else {
+        // Fallback: search any active service type or create under the first active category
+        serviceType = await prisma.serviceType.findFirst({
+          where: { name: { equals: typeName, mode: 'insensitive' }, deletedAt: null },
+        });
+
+        if (!serviceType) {
+          const firstCat = await prisma.serviceCategory.findFirst({
+            where: { deletedAt: null, isActive: true },
+          });
+          if (firstCat) {
+            serviceType = await prisma.serviceType.create({
+              data: {
+                categoryId: firstCat.id,
+                name: typeName,
+                description: `Custom service: ${typeName}`,
+                basePrice: 500,
+                durationMinutes: 60,
+                isActive: true,
+              },
+            });
+          }
+        }
+      }
+    }
+
+    if (!serviceType) throw new ApiError(404, 'Valid service type could not be resolved or created');
 
     if (req.body.preferredDateTime) {
       const preferred = new Date(req.body.preferredDateTime);
@@ -71,7 +129,7 @@ export const createServiceRequest = [
     const request = await prisma.serviceRequest.create({
       data: {
         customerId: req.user!.userId,
-        serviceTypeId: req.body.serviceTypeId,
+        serviceTypeId: serviceType.id,
         title: req.body.title,
         description: req.body.description,
         location: req.body.location,
