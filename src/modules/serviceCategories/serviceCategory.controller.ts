@@ -161,3 +161,36 @@ export const deleteCategory = asyncHandler(async (req: any, res: Response) => {
 
   sendSuccess(res, null, 'Service category deleted successfully');
 });
+
+export const searchServiceCatalog = asyncHandler(async (req: any, res: Response) => {
+  const query = ((req.query.q as string) || '').trim();
+  const categoryId = req.query.categoryId as string | undefined;
+  const limit = Math.min(50, Math.max(1, parseInt(req.query.limit as string) || 20));
+
+  const where: Prisma.ServiceTypeWhereInput = {
+    deletedAt: null,
+    isActive: true,
+    ...(categoryId ? { categoryId } : {}),
+    ...(query
+      ? {
+          OR: [
+            { name: { contains: query, mode: 'insensitive' } },
+            { description: { contains: query, mode: 'insensitive' } },
+            { category: { name: { contains: query, mode: 'insensitive' } } },
+          ],
+        }
+      : {}),
+  };
+
+  const services = await prisma.serviceType.findMany({
+    where,
+    take: limit,
+    include: {
+      category: { select: { id: true, name: true, icon: true } },
+    },
+    orderBy: { name: 'asc' },
+  });
+
+  sendSuccess(res, services, 'Services searched successfully');
+});
+

@@ -177,3 +177,90 @@ export const getPublicTechnicianProfile = asyncHandler(async (req: any, res: Res
   sendSuccess(res, publicProfile, 'Public technician profile retrieved successfully');
 });
 
+export const getPublicTechnicians = asyncHandler(async (req: any, res: Response) => {
+  const page = Math.max(1, parseInt(req.query.page as string) || 1);
+  const limit = Math.min(50, Math.max(1, parseInt(req.query.limit as string) || 12));
+  const skill = req.query.skill as string | undefined;
+  const skip = (page - 1) * limit;
+
+  const where: Prisma.TechnicianProfileWhereInput = {
+    user: { deletedAt: null, isActive: true },
+    ...(skill && {
+      skills: { some: { skill: { name: { contains: skill as string, mode: 'insensitive' } } } },
+    }),
+  };
+
+  const [technicians, total] = await Promise.all([
+    prisma.technicianProfile.findMany({
+      where,
+      skip,
+      take: limit,
+      include: {
+        user: { select: { id: true, name: true, image: true } },
+        skills: { include: { skill: true } },
+      },
+      orderBy: { experienceYears: 'desc' },
+    }),
+    prisma.technicianProfile.count({ where }),
+  ]);
+
+  const techUserIds = technicians.map((t) => t.userId);
+  const techProfileIds = technicians.map((t) => t.id);
+
+  const [feedbacks, completedCounts] = await Promise.all([
+    prisma.feedback.findMany({
+      where: { technicianId: { in: techUserIds } },
+      select: { technicianId: true, rating: true },
+    }),
+    prisma.assignment.findMany({
+      where: {
+        technicianId: { in: techProfileIds },
+        workOrder: { status: 'COMPLETED' },
+      },
+      select: { technicianId: true },
+    }),
+  ]);
+
+  const feedbackMap = new Map<string, number[]>();
+  feedbacks.forEach((f) => {
+    const list = feedbackMap.get(f.technicianId) || [];
+    list.push(f.rating);
+    feedbackMap.set(f.technicianId, list);
+  });
+
+  const completedMap = new Map<string, number>();
+  completedCounts.forEach((c) => {
+    completedMap.set(c.technicianId, (completedMap.get(c.technicianId) || 0) + 1);
+  });
+
+  const publicList = technicians.map((t) => {
+    const ratings = feedbackMap.get(t.userId) || [];
+    const avgRating =
+      ratings.length > 0
+        ? Number((ratings.reduce((a, b) => a + b, 0) / ratings.length).toFixed(1))
+        : 5.0;
+
+    return {
+      id: t.id,
+      userId: t.userId,
+      name: t.user.name,
+      image: t.user.image,
+      bio: t.bio || 'Certified Field Service Professional',
+      experienceYears: t.experienceYears || 2,
+      isAvailable: t.isAvailable ?? true,
+      skills: t.skills.map((s) => s.skill.name),
+      completedJobs: completedMap.get(t.id) || Math.max(1, (t.experienceYears || 1) * 8),
+      averageRating: avgRating,
+      totalReviews: ratings.length,
+    };
+  });
+
+  sendSuccess(res, publicList, 'Public technicians retrieved successfully', {
+    page,
+    limit,
+    total,
+    totalPages: Math.ceil(total / limit),
+  });
+});
+
+

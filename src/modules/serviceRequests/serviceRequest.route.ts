@@ -12,6 +12,7 @@ import {
   getServiceTimeline,
   rescheduleServiceRequest,
   rebookServiceRequest,
+  getTrackServiceRequest,
 } from './serviceRequest.controller';
 import { authenticate, authorize } from '../../middlewares/authenticate';
 import { validateRequest } from '../../middlewares/validateRequest';
@@ -47,8 +48,9 @@ const reviewSchema = z.object({
   rejectionReason: z.string().optional(),
 });
 
-// Available slots lookup (MUST come before /:id)
-router.get('/available-slots', authenticate, getAvailableSlots);
+// Public availability & tracking endpoints (MUST come before /:id)
+router.get('/available-slots', getAvailableSlots);
+router.get('/track/:id', getTrackServiceRequest);
 
 router.post('/', authenticate, authorize('CUSTOMER'), validateRequest({ body: createServiceRequestSchema }), createServiceRequest);
 router.get('/', authenticate, getServiceRequests);

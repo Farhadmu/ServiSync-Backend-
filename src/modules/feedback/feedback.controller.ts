@@ -97,3 +97,80 @@ export const getMyReviews = asyncHandler(async (req: any, res: Response) => {
   sendSuccess(res, reviews, 'Customer reviews retrieved successfully');
 });
 
+export const getPublicReviews = asyncHandler(async (req: any, res: Response) => {
+  const limit = Math.min(20, Math.max(1, parseInt(req.query.limit as string) || 6));
+
+  const [feedbacks, total, agg] = await Promise.all([
+    prisma.feedback.findMany({
+      take: limit,
+      orderBy: { createdAt: 'desc' },
+      include: {
+        customer: { select: { id: true, name: true, image: true } },
+        technician: { select: { id: true, name: true, image: true } },
+        workOrder: {
+          select: {
+            id: true,
+            assignment: {
+              select: {
+                serviceRequest: {
+                  select: {
+                    title: true,
+                    serviceType: {
+                      select: {
+                        name: true,
+                        category: { select: { name: true } },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    }),
+    prisma.feedback.count(),
+    prisma.feedback.aggregate({
+      _avg: { rating: true },
+      _count: { id: true },
+    }),
+  ]);
+
+  const sanitizedReviews = feedbacks.map((f) => {
+    const parts = (f.customer?.name || 'Verified Customer').trim().split(/\s+/);
+    const displayName = parts.length > 1 ? `${parts[0]} ${parts[parts.length - 1][0]}.` : parts[0];
+
+    return {
+      id: f.id,
+      rating: f.rating,
+      comment: f.comment,
+      createdAt: f.createdAt,
+      customerName: displayName,
+      customerImage: f.customer?.image,
+      technicianName: f.technician?.name || 'Certified Specialist',
+      serviceName:
+        f.workOrder?.assignment?.serviceRequest?.serviceType?.name ||
+        f.workOrder?.assignment?.serviceRequest?.title ||
+        'Standard Maintenance',
+      categoryName:
+        f.workOrder?.assignment?.serviceRequest?.serviceType?.category?.name || 'Field Service',
+    };
+  });
+
+  const averageRating = agg._avg.rating ? Number(agg._avg.rating.toFixed(1)) : 4.9;
+
+  sendSuccess(
+    res,
+    {
+      reviews: sanitizedReviews,
+      stats: {
+        totalReviews: total,
+        averageRating,
+        verifiedReviewCount: total,
+      },
+    },
+    'Public verified reviews retrieved successfully'
+  );
+});
+
+

@@ -858,3 +858,101 @@ export const rebookServiceRequest = asyncHandler(async (req: any, res: Response)
   sendCreated(res, newRequest, 'Service rebooked successfully as a new request');
 });
 
+export const getTrackServiceRequest = asyncHandler(async (req: any, res: Response) => {
+  const { id } = req.params;
+
+  const request = await prisma.serviceRequest.findFirst({
+    where: {
+      OR: [
+        { id },
+        { id: { startsWith: id } },
+      ],
+      deletedAt: null,
+    },
+    include: {
+      serviceType: { include: { category: true } },
+      assignments: {
+        where: { status: { not: 'CANCELLED' } },
+        include: {
+          technician: { include: { user: { select: { name: true, image: true } } } },
+          workOrder: { select: { status: true, startedAt: true, completedAt: true } },
+          schedule: true,
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 1,
+      },
+    },
+  });
+
+  if (!request) {
+    throw new ApiError(404, 'Service request not found with this tracking reference');
+  }
+
+  const activeAssignment = request.assignments[0];
+  const activeWorkOrder = activeAssignment?.workOrder;
+  const activeSchedule = activeAssignment?.schedule;
+
+  const stages = [
+    { key: 'SUBMITTED', label: 'Request Submitted', done: true, timestamp: request.createdAt },
+    {
+      key: 'REVIEW',
+      label: 'Manager Review',
+      done: ['UNDER_REVIEW', 'APPROVED', 'ASSIGNED', 'SCHEDULED', 'COMPLETED', 'INVOICED', 'PAID', 'CLOSED'].includes(request.status),
+      timestamp: request.updatedAt,
+    },
+    {
+      key: 'APPROVED',
+      label: 'Approved for Dispatch',
+      done: ['APPROVED', 'ASSIGNED', 'SCHEDULED', 'COMPLETED', 'INVOICED', 'PAID', 'CLOSED'].includes(request.status),
+    },
+    {
+      key: 'ASSIGNED',
+      label: 'Technician Assigned',
+      done: Boolean(activeAssignment),
+      timestamp: activeAssignment?.createdAt,
+      technicianName: activeAssignment?.technician?.user?.name,
+    },
+    {
+      key: 'SCHEDULED',
+      label: 'Visit Scheduled',
+      done: Boolean(activeSchedule),
+      scheduledStartAt: activeSchedule?.startAt,
+      scheduledEndAt: activeSchedule?.endAt,
+    },
+    {
+      key: 'IN_PROGRESS',
+      label: 'Service In Progress',
+      done: ['IN_PROGRESS', 'COMPLETED'].includes(activeWorkOrder?.status || ''),
+      timestamp: activeWorkOrder?.startedAt,
+    },
+    {
+      key: 'COMPLETED',
+      label: 'Service Completed',
+      done: activeWorkOrder?.status === 'COMPLETED' || ['COMPLETED', 'INVOICED', 'PAID', 'CLOSED'].includes(request.status),
+      timestamp: activeWorkOrder?.completedAt,
+    },
+  ];
+
+  const trackingSummary = {
+    id: request.id,
+    title: request.title,
+    status: request.status,
+    createdAt: request.createdAt,
+    preferredDateTime: request.preferredDateTime,
+    categoryName: request.serviceType?.category?.name || 'General Maintenance',
+    serviceTypeName: request.serviceType?.name || 'Standard Service',
+    assignedTechnician: activeAssignment?.technician?.user ? {
+      name: activeAssignment.technician.user.name,
+      image: activeAssignment.technician.user.image,
+    } : null,
+    scheduledWindow: activeSchedule ? {
+      startAt: activeSchedule.startAt,
+      endAt: activeSchedule.endAt,
+    } : null,
+    stages,
+  };
+
+  sendSuccess(res, trackingSummary, 'Service tracking details retrieved successfully');
+});
+
+
