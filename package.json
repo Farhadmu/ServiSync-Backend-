@@ -5,7 +5,7 @@
   "description": "ServiSync - Field Service Management System backend API",
   "main": "dist/src/server.js",
   "scripts": {
-    "dev": "nodemon --exec ts-node src/server.ts",
+    "dev": "tsx watch src/server.ts",
     "build": "tsc",
     "start": "tsx src/server.ts",
     "lint": "echo 'install eslint to enable'",
