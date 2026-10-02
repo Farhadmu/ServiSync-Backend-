@@ -51,6 +51,10 @@ export const updateUserStatus = [
     const user = await prisma.user.findUnique({ where: { id: req.params.id } });
     if (!user) throw new ApiError(404, 'User not found');
 
+    if (req.user!.userId === req.params.id && !req.body.isActive) {
+      throw new ApiError(400, 'You cannot deactivate your own account.');
+    }
+
     const updated = await prisma.user.update({
       where: { id: req.params.id },
       data: { isActive: req.body.isActive },
@@ -76,6 +80,10 @@ export const updateUserRole = [
   asyncHandler(async (req: any, res: Response) => {
     const user = await prisma.user.findUnique({ where: { id: req.params.id } });
     if (!user) throw new ApiError(404, 'User not found');
+
+    if (req.user!.userId === req.params.id && req.body.role !== 'ADMIN') {
+      throw new ApiError(400, 'You cannot remove your own ADMIN role.');
+    }
 
     const updated = await prisma.user.update({
       where: { id: req.params.id },
