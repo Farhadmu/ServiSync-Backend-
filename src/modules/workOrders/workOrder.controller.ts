@@ -8,6 +8,7 @@ import { authenticate, authorize, RequestUser } from '../../middlewares/authenti
 import { validateRequest } from '../../middlewares/validateRequest';
 import { z } from 'zod';
 import { createAuditLog, getClientIp } from '../../utils/auditLog';
+import { createNotification } from '../../utils/notification';
 import { WORK_ORDER_STATUS_TRANSITIONS } from '../../constants';
 
 const statusUpdateSchema = z.object({
@@ -133,6 +134,36 @@ export const updateWorkOrderStatus = asyncHandler(async (req: any, res: Response
       where: { id: updated.assignment.serviceRequest.id },
       data: { status: 'COMPLETED' },
     });
+  }
+
+  // Automated notification to customer on status transition
+  try {
+    const customerId = updated.assignment?.serviceRequest?.customerId;
+    if (customerId) {
+      let notifTitle = 'Service Status Updated';
+      let notifMsg = `Your service request is now ${newStatus.replace('_', ' ').toLowerCase()}.`;
+      if (newStatus === 'ARRIVED') {
+        notifTitle = 'Technician Arrived';
+        notifMsg = 'Your assigned technician has arrived on site.';
+      } else if (newStatus === 'IN_PROGRESS') {
+        notifTitle = 'Work In Progress';
+        notifMsg = 'Your maintenance work is actively in progress.';
+      } else if (newStatus === 'COMPLETED') {
+        notifTitle = 'Work Order Completed';
+        notifMsg = 'The field work order has been completed by your technician.';
+      }
+
+      await createNotification({
+        userId: customerId,
+        type: 'STATUS_CHANGE',
+        title: notifTitle,
+        message: notifMsg,
+        entityType: 'WORK_ORDER',
+        entityId: updated.id,
+      });
+    }
+  } catch (notifErr) {
+    console.warn('Failed to send status update notification non-fatally:', notifErr);
   }
 
   sendSuccess(res, updated, `Work order status updated to ${newStatus}`);
