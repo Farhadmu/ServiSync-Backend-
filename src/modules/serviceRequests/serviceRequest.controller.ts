@@ -126,6 +126,23 @@ export const createServiceRequest = [
       }
     }
 
+    // Duplicate submission prevention: check if identical pending request was submitted within the last 60s
+    const sixtySecondsAgo = new Date(Date.now() - 60 * 1000);
+    const duplicate = await prisma.serviceRequest.findFirst({
+      where: {
+        customerId: req.user!.userId,
+        serviceTypeId: serviceType.id,
+        title: req.body.title,
+        status: 'PENDING',
+        createdAt: { gte: sixtySecondsAgo },
+        deletedAt: null,
+      },
+    });
+
+    if (duplicate) {
+      throw new ApiError(409, 'Duplicate request detected. A pending ticket with this title was recently submitted.');
+    }
+
     const request = await prisma.serviceRequest.create({
       data: {
         customerId: req.user!.userId,
@@ -221,8 +238,7 @@ export const getServiceRequests = asyncHandler(async (req: any, res: Response) =
   sendSuccess(res, requests, 'Service requests fetched successfully', {
     page: safePage,
     limit: safeLimit,
-    total,
-    totalPages: Math.ceil(total / parseInt(limit as string)),
+    totalPages: Math.ceil(total / safeLimit),
   });
 });
 

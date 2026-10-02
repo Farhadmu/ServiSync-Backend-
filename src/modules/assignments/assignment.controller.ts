@@ -53,28 +53,52 @@ export const assignTechnician = [
     if (!technician) throw new ApiError(404, 'Technician not found');
     if (!technician.isAvailable) throw new ApiError(400, 'Technician is not available');
 
-    if (scheduledStartAt && scheduledEndAt) {
-      const start = new Date(scheduledStartAt);
-      const end = new Date(scheduledEndAt);
+    const start = scheduledStartAt ? new Date(scheduledStartAt) : null;
+    const end = scheduledEndAt ? new Date(scheduledEndAt) : null;
 
-      if (start >= end) throw new ApiError(400, 'Invalid schedule: start must be before end');
-
-      const conflicting = await prisma.schedule.findFirst({
-        where: {
-          technicianId,
-          cancelledAt: null,
-          OR: [
-            { startAt: { lt: end }, endAt: { gt: start } },
-          ],
-        },
-      });
-
-      if (conflicting) {
-        throw new ApiError(409, 'Technician is already booked for the selected time slot');
-      }
+    if (start && end && start >= end) {
+      throw new ApiError(400, 'Invalid schedule: start must be before end');
     }
 
     const assignment = await prisma.$transaction(async (tx) => {
+      // 1. Concurrency guard: Re-validate service request status inside atomic transaction
+      const currentReq = await tx.serviceRequest.findUnique({
+        where: { id: serviceRequestId },
+        select: { id: true, status: true, title: true, customerId: true },
+      });
+
+      if (!currentReq || currentReq.status !== 'APPROVED') {
+        throw new ApiError(409, 'Service request is no longer in an assignable state (already assigned or modified)');
+      }
+
+      // 2. Concurrency guard: Prevent duplicate active assignment race conditions
+      const existingAssignment = await tx.assignment.findFirst({
+        where: {
+          serviceRequestId,
+          status: { in: ['PENDING', 'SCHEDULED', 'ACCEPTED'] },
+        },
+      });
+
+      if (existingAssignment) {
+        throw new ApiError(409, 'Service request already has an active assignment');
+      }
+
+      // 3. Concurrency guard: Re-validate schedule conflicts inside atomic transaction
+      if (start && end) {
+        const conflicting = await tx.schedule.findFirst({
+          where: {
+            technicianId,
+            cancelledAt: null,
+            startAt: { lt: end },
+            endAt: { gt: start },
+          },
+        });
+
+        if (conflicting) {
+          throw new ApiError(409, 'Technician is already booked for the selected time slot');
+        }
+      }
+
       const created = await tx.assignment.create({
         data: {
           serviceRequestId,
@@ -91,13 +115,13 @@ export const assignTechnician = [
         data: { status: 'ASSIGNED' },
       });
 
-      if (scheduledStartAt && scheduledEndAt) {
+      if (start && end) {
         await tx.schedule.create({
           data: {
             assignmentId: created.id,
             technicianId,
-            startAt: new Date(scheduledStartAt),
-            endAt: new Date(scheduledEndAt),
+            startAt: start,
+            endAt: end,
           },
         });
       }

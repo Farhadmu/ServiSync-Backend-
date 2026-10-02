@@ -116,6 +116,20 @@ export async function getTechnicianRecommendations(
   const recommended: CandidateTechnician[] = [];
   const ineligible: IneligibleTechnician[] = [];
 
+  // Batch fetch all customer feedback for all candidate technicians to eliminate N+1 query overhead
+  const allCandidateUserIds = technicians.map((t) => t.userId);
+  const allFeedbacks = await prisma.feedback.findMany({
+    where: { technicianId: { in: allCandidateUserIds } },
+    select: { technicianId: true, rating: true },
+  });
+
+  const feedbackMap = new Map<string, number[]>();
+  for (const f of allFeedbacks) {
+    const list = feedbackMap.get(f.technicianId) || [];
+    list.push(f.rating);
+    feedbackMap.set(f.technicianId, list);
+  }
+
   for (const tech of technicians) {
     const techSkillNames = tech.skills.map((s) => s.skill.name.toLowerCase());
     const matchedSkills = tech.skills
@@ -167,15 +181,12 @@ export async function getTechnicianRecommendations(
       continue;
     }
 
-    // Calculate rating from real feedback
-    const feedbacks = await prisma.feedback.findMany({
-      where: { technicianId: tech.userId },
-      select: { rating: true },
-    });
-    const totalReviews = feedbacks.length;
+    // Calculate rating from batched feedback map (O(1) lookup)
+    const userRatings = feedbackMap.get(tech.userId) || [];
+    const totalReviews = userRatings.length;
     const averageRating =
       totalReviews > 0
-        ? Number((feedbacks.reduce((acc, f) => acc + f.rating, 0) / totalReviews).toFixed(1))
+        ? Number((userRatings.reduce((acc, r) => acc + r, 0) / totalReviews).toFixed(1))
         : 4.5; // Default reputable baseline for verified onboarding
 
     // Compute Multi-Factor Deterministic Score:

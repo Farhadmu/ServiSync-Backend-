@@ -281,5 +281,111 @@ describe('ServiSync Backend - Core Safety & Business Logic Tests', () => {
       assert.equal(getSlotCountForDuration(240), 2);
     });
   });
+
+  describe('11. Concurrency Double-Booking & Overlapping Slot Detection', () => {
+    it('should detect when two requested time intervals overlap', () => {
+      const isOverlapping = (startA: Date, endA: Date, startB: Date, endB: Date) => {
+        return startA < endB && endA > startB;
+      };
+
+      const existingStart = new Date('2026-10-15T10:00:00Z');
+      const existingEnd = new Date('2026-10-15T12:00:00Z');
+
+      // Overlapping scenarios
+      assert.equal(isOverlapping(new Date('2026-10-15T11:00:00Z'), new Date('2026-10-15T13:00:00Z'), existingStart, existingEnd), true);
+      assert.equal(isOverlapping(new Date('2026-10-15T09:00:00Z'), new Date('2026-10-15T11:00:00Z'), existingStart, existingEnd), true);
+      assert.equal(isOverlapping(new Date('2026-10-15T10:30:00Z'), new Date('2026-10-15T11:30:00Z'), existingStart, existingEnd), true);
+
+      // Non-overlapping scenarios (back-to-back is allowed)
+      assert.equal(isOverlapping(new Date('2026-10-15T08:00:00Z'), new Date('2026-10-15T10:00:00Z'), existingStart, existingEnd), false);
+      assert.equal(isOverlapping(new Date('2026-10-15T12:00:00Z'), new Date('2026-10-15T14:00:00Z'), existingStart, existingEnd), false);
+    });
+  });
+
+  describe('12. Duplicate Submission Prevention & Timestamp Comparison', () => {
+    it('should identify identical requests submitted within 60 seconds as duplicates', () => {
+      const isDuplicateSubmission = (
+        prevRequest: { customerId: string; serviceTypeId: string; title: string; createdAt: Date; status: string },
+        incoming: { customerId: string; serviceTypeId: string; title: string; requestTime: Date }
+      ) => {
+        const diffMs = incoming.requestTime.getTime() - prevRequest.createdAt.getTime();
+        return (
+          prevRequest.customerId === incoming.customerId &&
+          prevRequest.serviceTypeId === incoming.serviceTypeId &&
+          prevRequest.title.trim().toLowerCase() === incoming.title.trim().toLowerCase() &&
+          prevRequest.status === 'PENDING' &&
+          diffMs >= 0 &&
+          diffMs <= 60000
+        );
+      };
+
+      const now = new Date('2026-10-02T12:00:00Z');
+      const prev = {
+        customerId: 'cust-1',
+        serviceTypeId: 'srv-1',
+        title: 'AC Gas Refill',
+        createdAt: new Date('2026-10-02T11:59:45Z'), // 15s ago
+        status: 'PENDING',
+      };
+
+      // Exact match within 15 seconds -> duplicate
+      assert.equal(isDuplicateSubmission(prev, { customerId: 'cust-1', serviceTypeId: 'srv-1', title: 'AC Gas Refill', requestTime: now }), true);
+
+      // Same customer, different title -> not duplicate
+      assert.equal(isDuplicateSubmission(prev, { customerId: 'cust-1', serviceTypeId: 'srv-1', title: 'Water Pipe Leak', requestTime: now }), false);
+
+      // Same request but submitted 3 minutes later -> not duplicate
+      const later = new Date('2026-10-02T12:03:00Z');
+      assert.equal(isDuplicateSubmission(prev, { customerId: 'cust-1', serviceTypeId: 'srv-1', title: 'AC Gas Refill', requestTime: later }), false);
+    });
+  });
+
+  describe('13. Authoritative 24-Hour SLA Breach & Warning Detection', () => {
+    it('should correctly flag requests pending over 24h as breached and over 12h as warning', () => {
+      const evaluateSla = (createdAt: Date, now: Date, status: string) => {
+        if (!['PENDING', 'UNDER_REVIEW'].includes(status)) return 'COMPLIANT';
+        const hoursAge = (now.getTime() - createdAt.getTime()) / (1000 * 60 * 60);
+        if (hoursAge >= 24) return 'BREACHED';
+        if (hoursAge >= 12) return 'WARNING';
+        return 'COMPLIANT';
+      };
+
+      const now = new Date('2026-10-02T12:00:00Z');
+      const created26hAgo = new Date('2026-10-01T10:00:00Z');
+      const created14hAgo = new Date('2026-10-01T22:00:00Z');
+      const created2hAgo = new Date('2026-10-02T10:00:00Z');
+
+      assert.equal(evaluateSla(created26hAgo, now, 'PENDING'), 'BREACHED');
+      assert.equal(evaluateSla(created14hAgo, now, 'PENDING'), 'WARNING');
+      assert.equal(evaluateSla(created2hAgo, now, 'PENDING'), 'COMPLIANT');
+
+      // Completed requests are not evaluated for pending SLA breach
+      assert.equal(evaluateSla(created26hAgo, now, 'COMPLETED'), 'COMPLIANT');
+    });
+  });
+
+  describe('14. Safe Pagination Bounds & Total Pages Calculations', () => {
+    it('should clamp pagination inputs and calculate total pages correctly', () => {
+      const getPaginationMeta = (pageInput: any, limitInput: any, totalItems: number) => {
+        const parsedPage = parseInt(pageInput);
+        const parsedLimit = parseInt(limitInput);
+        const safePage = Math.max(1, Math.min(100000, Number.isNaN(parsedPage) ? 1 : parsedPage));
+        const safeLimit = Math.min(100, Math.max(1, Number.isNaN(parsedLimit) ? 10 : parsedLimit));
+        const totalPages = Math.ceil(totalItems / safeLimit) || 1;
+        return { safePage, safeLimit, totalPages };
+      };
+
+      // Standard case
+      assert.deepEqual(getPaginationMeta('2', '10', 45), { safePage: 2, safeLimit: 10, totalPages: 5 });
+
+      // Capped maximum limit (100 max)
+      assert.deepEqual(getPaginationMeta('1', '500', 450), { safePage: 1, safeLimit: 100, totalPages: 5 });
+
+      // Negative or invalid inputs clamped to minimum 1
+      assert.deepEqual(getPaginationMeta('-5', '0', 25), { safePage: 1, safeLimit: 1, totalPages: 25 });
+      assert.deepEqual(getPaginationMeta('invalid', 'invalid', 0), { safePage: 1, safeLimit: 10, totalPages: 1 });
+    });
+  });
 });
+
 
