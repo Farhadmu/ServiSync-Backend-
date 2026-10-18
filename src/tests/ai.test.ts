@@ -58,7 +58,7 @@ describe('ServiSync Backend — AI Architecture & Safety Tests', () => {
     registry = AIProviderRegistry.getInstance();
     orchestrator = AIOrchestrator.getInstance();
 
-    mockGemini = new MockAIProvider('gemini', 'gemini-1.5-flash');
+    mockGemini = new MockAIProvider('gemini', 'gemini-2.5-flash');
     mockGroq = new MockAIProvider('groq', 'llama-3.3-70b-versatile');
     mockCerebras = new MockAIProvider('cerebras', 'llama3.1-8b');
     mockHF = new MockAIProvider('huggingface', 'meta-llama/Llama-3.2-3B-Instruct');

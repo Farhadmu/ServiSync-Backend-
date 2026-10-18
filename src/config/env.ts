@@ -29,7 +29,7 @@ export const envSchema = z.object({
   ALLOWED_ORIGINS: z.string().optional(),
   // ── AI Provider Configurations (Free-Tier Prioritized) ───────────────────
   GEMINI_API_KEY: z.string().optional(),
-  GEMINI_MODEL: z.string().default('gemini-1.5-flash'),
+  GEMINI_MODEL: z.string().default('gemini-2.5-flash'),
   GROQ_API_KEY: z.string().optional(),
   GROQ_MODEL: z.string().default('llama-3.3-70b-versatile'),
   CEREBRAS_API_KEY: z.string().optional(),
