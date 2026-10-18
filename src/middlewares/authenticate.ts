@@ -58,3 +58,27 @@ export const authorize = (...allowedRoles: ('CUSTOMER' | 'TECHNICIAN' | 'MANAGER
     next();
   };
 };
+
+export const optionalAuthenticate = async (req: Request & { user?: RequestUser }, _res: Response, next: NextFunction) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.split(' ')[1];
+      const payload = verifyAccessToken(token);
+      const user = await prisma.user.findUnique({
+        where: { id: payload.userId },
+        select: { id: true, email: true, role: true, isActive: true, deletedAt: true },
+      });
+      if (user && !user.deletedAt && user.isActive) {
+        req.user = {
+          userId: user.id,
+          email: user.email,
+          role: user.role,
+        };
+      }
+    }
+  } catch {
+    // Gracefully ignore token errors for optional routes
+  }
+  next();
+};

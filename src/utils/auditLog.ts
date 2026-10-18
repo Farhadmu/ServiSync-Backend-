@@ -44,7 +44,8 @@ export type AuditAction =
   | 'QUOTE_REJECTED'
   | 'QUOTE_CHANGE_REQUESTED'
   | 'SERVICE_REQUEST_RESCHEDULED'
-  | 'SERVICE_REQUEST_REBOOKED';
+  | 'SERVICE_REQUEST_REBOOKED'
+  | 'CONTACT_FORM_SUBMISSION';
 
 export async function createAuditLog(params: {
   userId?: string;

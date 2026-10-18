@@ -262,3 +262,39 @@ export const resetDefaultContent = asyncHandler(async (req: any, res: Response) 
 
   return sendSuccess(res, sections, 'Website content reset to default templates');
 });
+
+/**
+ * Public: Submit a validated contact inquiry with database persistence
+ */
+export const submitContactInquiry = asyncHandler(async (req: any, res: Response) => {
+  const { name, email, phone, subject, message } = req.body;
+  const ipAddress = getClientIp(req);
+  const userAgent = req.headers['user-agent'] as string | undefined;
+
+  await createAuditLog({
+    userId: req.user?.userId || null,
+    action: 'CONTACT_FORM_SUBMISSION',
+    entityType: 'WEBSITE_CONTENT',
+    newValues: {
+      name,
+      email,
+      phone: phone || null,
+      subject,
+      message,
+      submittedAt: new Date().toISOString(),
+    },
+    ipAddress,
+    userAgent,
+  });
+
+  const referenceId = `INQ-${Date.now().toString(36).toUpperCase()}`;
+
+  return sendSuccess(
+    res,
+    {
+      referenceId,
+      receivedAt: new Date().toISOString(),
+    },
+    'Thank you for reaching out! Your message has been safely received and our support team will contact you shortly.'
+  );
+});

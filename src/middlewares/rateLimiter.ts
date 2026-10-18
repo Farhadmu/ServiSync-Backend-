@@ -24,3 +24,11 @@ export const uploadLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+export const aiLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 60,
+  message: { success: false, message: 'Too many AI requests. Please slow down to preserve free-tier quota.', errors: [] },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+

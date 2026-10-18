@@ -7,19 +7,27 @@ import {
   togglePublishSection,
   reorderSections,
   resetDefaultContent,
+  submitContactInquiry,
 } from './content.controller';
-import { authenticate, authorize } from '../../middlewares/authenticate';
+import { authenticate, authorize, optionalAuthenticate } from '../../middlewares/authenticate';
 import { validateRequest } from '../../middlewares/validateRequest';
 import {
   updateContentSchema,
   reorderContentSchema,
   publishToggleSchema,
+  contactSubmissionSchema,
 } from './content.validation';
 
 const router = Router();
 
 // ── Public Routes ────────────────────────────────────────────────────────
 router.get('/published', getPublishedContent);
+router.post(
+  '/contact',
+  optionalAuthenticate,
+  validateRequest({ body: contactSubmissionSchema }),
+  submitContactInquiry
+);
 
 // ── Admin-Only CMS Routes ────────────────────────────────────────────────
 router.get('/admin', authenticate, authorize('ADMIN'), getAllAdminContent);

@@ -24,6 +24,7 @@ import contentRoutes from './modules/content/content.route';
 import addressRoutes from './modules/addresses/address.route';
 import supportRoutes from './modules/support/support.route';
 import quoteRoutes from './modules/quotes/quote.route';
+import aiRoutes from './modules/ai/ai.route';
 
 const app: Express = express();
 app.set('trust proxy', 1);
@@ -56,6 +57,7 @@ app.use('/api/v1/content', contentRoutes);
 app.use('/api/v1/addresses', addressRoutes);
 app.use('/api/v1/support', supportRoutes);
 app.use('/api/v1/quotes', quoteRoutes);
+app.use('/api/v1/ai', aiRoutes);
 
 app.use(notFound);
 app.use(errorHandler);
